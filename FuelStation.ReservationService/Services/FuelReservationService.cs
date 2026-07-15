@@ -14,45 +14,47 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
         _kafka = kafka;
     }
 
-    public override Task<StartResponse> StartFueling(StartRequest request, ServerCallContext context)
+    public override Task<StartFuellingResponse> StartFuelling(StartFuellingRequest request, ServerCallContext context)
     {
-        var result = _manager.StartFueling(request.PumpId, request.FuelType, request.PreauthorizedLitres);
+        var result = _manager.StartFuelling(request.PumpId, request.FuelType, request.PreauthorizedLitres);
 
         if (result.Success)
-            _ = _kafka.SendStartedEvent(result.SessionId!, request.PumpId, request.FuelType.ToString(), result.ReservedLitres);
+            _ = _kafka.SendFuellingStartedEvent(result.SessionId!, request.PumpId, request.FuelType.ToString(), result.ReservedLitres);
 
-        return Task.FromResult(new StartResponse
+        return Task.FromResult(new StartFuellingResponse
         {
             Success = result.Success,
-            SessionId = result.SessionId ?? "",
+            SessionId = result.SessionId ?? string.Empty,
             ReservedLitres = result.ReservedLitres,
-            Error = result.Error ?? ""
+            Error = result.Error ?? string.Empty
         });
     }
 
-    public override Task<StopResponse> StopFueling(StopRequest request, ServerCallContext context)
+    public override Task<CompleteFuellingResponse> CompleteFuelling(CompleteFuellingRequest request, ServerCallContext context)
     {
-        var result = _manager.StopFueling(request.SessionId, request.ActualLitres);
+        var result = _manager.CompleteFuelling(request.SessionId, request.ActualLitres);
 
         if (result.Success)
-            _ = _kafka.SendCompletedEvent(request.SessionId, request.FuelType.ToString(), request.ActualLitres);
+            _ = _kafka.SendFuellingCompletedEvent(request.SessionId, request.FuelType.ToString(), request.ActualLitres);
 
-        return Task.FromResult(new StopResponse { Success = result.Success, Error = result.Error ?? "" });
+        return Task.FromResult(new CompleteFuellingResponse { Success = result.Success, Error = result.Error ?? "" });
     }
 
-    public override Task<AddFuelResponse> AddFuel(AddFuelRequest request, ServerCallContext context)
+    public override Task<AddFuelFastResponse> AddFuelFast(AddFuelFastRequest request, ServerCallContext context)
     {
-        var result = _manager.AddFuel(Enum.Parse<FuelType>(request.FuelType), request.Litres);
+        var result = _manager.AddFuelFast(Enum.Parse<FuelType>(request.FuelType), request.Litres);
 
         if (result.Success)
-            _ = _kafka.SendFuelAddedEvent(result.TankId!, request.FuelType, request.Litres, result.NewVolume);
+            _ = _kafka.SendFuelAddedFastEvent(result.TankId!, request.FuelType, request.Litres, result.NewVolume);
 
-        return Task.FromResult(new AddFuelResponse
+        return Task.FromResult(new AddFuelFastResponse
         {
             Success = result.Success,
-            TankId = result.TankId ?? "",
+            TankId = result.TankId ?? string.Empty,
             NewVolume = result.NewVolume,
-            Error = result.Error ?? ""
+            Error = result.Error ?? string.Empty
+        });
+    }
         });
     }
 }

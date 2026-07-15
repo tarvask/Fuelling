@@ -6,13 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Protobuf Include="..\Contracts\fuel.proto" GrpcServices="Server" />
-    <None Update="appsettings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Google.Protobuf" Version="3.35.1" />
     <PackageReference Include="Grpc.AspNetCore" Version="2.80.0" />
     <PackageReference Include="Grpc.Core.Api" Version="2.80.0" />
@@ -24,5 +17,14 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.9" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.9" />
+
+    <Protobuf Include="..\Contracts\fuel.proto" GrpcServices="Server" />
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FuelStation.Shared\FuelStation.Shared.csproj" />
   </ItemGroup>
 </Project>

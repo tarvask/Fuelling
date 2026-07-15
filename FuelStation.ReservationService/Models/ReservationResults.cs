@@ -1,37 +1,37 @@
 namespace FuelStation.ReservationService.Models;
 
-public record StartFuelingResult
+public record StartFuellingResult
 {
-    public bool Success { get; init; }
-    public string? SessionId { get; init; }
-    public double ReservedLitres { get; init; }
-    public string? Error { get; init; }
+    public bool Success { get; private init; }
+    public string? SessionId { get; private init; }
+    public double ReservedLitres { get; private init; }
+    public string? Error { get; private init; }
 
-    public static StartFuelingResult Fail(string error) =>
+    public static StartFuellingResult Fail(string error) =>
         new() { Success = false, Error = error };
 
-    public static StartFuelingResult Ok(string sessionId, double reservedLitres) =>
+    public static StartFuellingResult Ok(string sessionId, double reservedLitres) =>
         new() { Success = true, SessionId = sessionId, ReservedLitres = reservedLitres };
 }
 
-public record StopFuelingResult
+public record CompleteFuellingResult
 {
-    public bool Success { get; init; }
-    public string? Error { get; init; }
+    public bool Success { get; private init; }
+    public string? Error { get; private init; }
 
-    public static StopFuelingResult Fail(string error) =>
+    public static CompleteFuellingResult Fail(string error) =>
         new() { Success = false, Error = error };
 
-    public static StopFuelingResult Ok() =>
+    public static CompleteFuellingResult Ok() =>
         new() { Success = true };
 }
 
 public record AddFuelResult
 {
-    public bool Success { get; init; }
-    public string? TankId { get; init; }
-    public double NewVolume { get; init; }
-    public string? Error { get; init; }
+    public bool Success { get; private init; }
+    public string? TankId { get; private init; }
+    public double NewVolume { get; private init; }
+    public string? Error { get; private init; }
 
     public static AddFuelResult Fail(string error) =>
         new() { Success = false, Error = error };

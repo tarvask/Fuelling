@@ -12,41 +12,41 @@ enum FuelType {
 }
 
 service FuelReservation {
-  rpc StartFueling (StartRequest) returns (StartResponse);
-  rpc StopFueling  (StopRequest)  returns (StopResponse);
-  rpc AddFuel      (AddFuelRequest) returns (AddFuelResponse);
+  rpc StartFuelling (StartFuellingRequest) returns (StartFuellingResponse);
+  rpc CompleteFuelling  (CompleteFuellingRequest)  returns (CompleteFuellingResponse);
+  rpc AddFuelFast      (AddFuelFastRequest) returns (AddFuelFastResponse);
 }
 
-message StartRequest {
-  string pump_id              = 1;
+message StartFuellingRequest {
+  string pump_id              = 1; // empty string means auto-selection by server
   FuelType fuel_type            = 2;
   double preauthorized_litres = 3;
 }
 
-message StartResponse {
+message StartFuellingResponse {
   bool   success         = 1;
   string session_id      = 2;
   double reserved_litres = 3;
   string error           = 4;
 }
 
-message StopRequest {
+message CompleteFuellingRequest {
   string session_id    = 1;
   FuelType fuel_type   = 2;
   double actual_litres = 3;
 }
 
-message StopResponse {
+message CompleteFuellingResponse {
   bool   success = 1;
   string error   = 2;
 }
 
-message AddFuelRequest {
+message AddFuelFastRequest {
   string fuel_type = 1;
   double litres    = 2;
 }
 
-message AddFuelResponse {
+message AddFuelFastResponse {
   bool   success    = 1;
   string tank_id    = 2;
   double new_volume = 3;

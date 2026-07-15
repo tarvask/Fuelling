@@ -24,4 +24,8 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\FuelStation.Shared\FuelStation.Shared.csproj" />
+  </ItemGroup>
+
 </Project>

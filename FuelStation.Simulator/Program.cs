@@ -2,6 +2,7 @@
 using System.Text.Json.Serialization;
 using Grpc.Net.Client;
 using Fuel;
+using FuelStation.Simulator.Models;
 
 // ----- Configuration parsing (enum-compatible) -----
 var configJson = File.ReadAllText("appsettings.json");
@@ -78,18 +79,11 @@ while (!cts.Token.IsCancellationRequested)
 {
     var fuelRequest = CreateRandomFuelData(probs, minLitres, maxLitres, rnd);
 
-    var suitablePumps = pumps.Where(p =>
-        Enum.TryParse<FuelType>(p.FuelType, out var pumpFuelType) && pumpFuelType == fuelRequest.FuelType
-    ).ToList();
-
-    if (suitablePumps.Count == 0) continue;
-    var pump = suitablePumps[rnd.Next(suitablePumps.Count)];
-
     try
     {
-        var startReply = await client.StartFuelingAsync(new StartRequest
+        var startReply = await client.StartFuellingAsync(new StartFuellingRequest
         {
-            PumpId = pump.Id,
+            PumpId = string.Empty,
             FuelType = fuelRequest.FuelType,
             PreauthorizedLitres = fuelRequest.Litres
         });
@@ -100,19 +94,21 @@ while (!cts.Token.IsCancellationRequested)
         }
         else
         {
-            Console.WriteLine($"[{DateTime.Now:T}] Session {startReply.SessionId}: reserved {startReply.ReservedLitres}L {fuelRequest.FuelType} on {pump.Id}");
+            Console.WriteLine($"[{DateTime.Now:T}] Session {startReply.SessionId}: reserved {startReply.ReservedLitres}L {fuelRequest.FuelType}");
 
             // Simulate fueling time
             await Task.Delay(GetTotalFuelingProcessDurationMs(fuelRequest.Litres));
 
-            var stopReply = await client.StopFuelingAsync(new StopRequest
+            var stopReply = await client.CompleteFuellingAsync(new CompleteFuellingRequest
             {
                 SessionId = startReply.SessionId,
                 FuelType = fuelRequest.FuelType,
                 ActualLitres = startReply.ReservedLitres
             });
 
-            Console.WriteLine($"[{DateTime.Now:T}] Session {startReply.SessionId} ended: actual {startReply.ReservedLitres}L, success={stopReply.Success}");
+            Console.WriteLine(stopReply.Success
+                ? $"[{DateTime.Now:T}] Session {startReply.SessionId} ended: actual {startReply.ReservedLitres}L, success={stopReply.Success}"
+                : $"[{DateTime.Now:T}] Session {startReply.SessionId} ended: actual {startReply.ReservedLitres}L, success={stopReply.Success}, error={stopReply.Error}");
         }
     }
     catch (Exception ex)
@@ -140,28 +136,4 @@ static FuelRequest CreateRandomFuelData(
     return new FuelRequest(selectedFuel, litres);
 }
 
-// ----- Configuration classes -----
 public record FuelRequest(FuelType FuelType, double Litres);
-
-public class SimulationConfig
-{
-    public SimulationSection Simulation { get; set; } = new();
-}
-
-public class SimulationSection
-{
-    public int SpeedFactor { get; set; }
-    public List<PumpInfo> Pumps { get; set; } = new();
-    public Dictionary<FuelType, double> FuelProbabilities { get; set; } = new();
-    public int MinLitres { get; set; }
-    public int MaxLitres { get; set; }
-    public int MinIntervalVirtualMinutes { get; set; }
-    public int MaxIntervalVirtualMinutes { get; set; }
-    public double PumpSpeedLitresPerMinute { get; set; }
-}
-
-public class PumpInfo
-{
-    public string Id { get; set; } = "";
-    public string FuelType { get; set; } = "";   // kept as string, parsed when needed
-}

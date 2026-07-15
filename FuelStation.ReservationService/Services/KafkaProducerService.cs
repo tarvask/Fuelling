@@ -1,6 +1,8 @@
 using Confluent.Kafka;
 using System.Text.Json;
+using Fuel;
 using FuelStation.ReservationService.Constants;
+using FuelStation.Shared;
 
 namespace FuelStation.ReservationService.Services;
 
@@ -14,7 +16,7 @@ public class KafkaProducerService
         _producer = new ProducerBuilder<string, string>(config).Build();
     }
 
-    public async Task SendStartedEvent(string sessionId, string pumpId, string fuelType, double reservedLitres)
+    public async Task SendFuellingStartedEvent(string sessionId, string pumpId, string fuelType, double reservedLitres)
     {
         var msg = new
         {
@@ -24,11 +26,11 @@ public class KafkaProducerService
             reserved_litres = reservedLitres,
             timestamp = DateTime.UtcNow
         };
-        await _producer.ProduceAsync(KafkaTopics.FuelingStarted,
+        await _producer.ProduceAsync(KafkaTopics.FuellingStarted,
             new Message<string, string> { Key = sessionId, Value = JsonSerializer.Serialize(msg) });
     }
 
-    public async Task SendCompletedEvent(string sessionId, string fuelType, double actualLitres)
+    public async Task SendFuellingCompletedEvent(string sessionId, string fuelType, double actualLitres)
     {
         var msg = new
         {
@@ -37,11 +39,11 @@ public class KafkaProducerService
             actual_litres = actualLitres,
             timestamp = DateTime.UtcNow
         };
-        await _producer.ProduceAsync(KafkaTopics.FuelingCompleted,
+        await _producer.ProduceAsync(KafkaTopics.FuellingCompleted,
             new Message<string, string> { Key = sessionId, Value = JsonSerializer.Serialize(msg) });
     }
 
-    public async Task SendFuelAddedEvent(string tankId, string fuelType, double litres, double newVolume)
+    public async Task SendFuelAddedFastEvent(string tankId, string fuelType, double litres, double newVolume)
     {
         var msg = new
         {
@@ -51,7 +53,7 @@ public class KafkaProducerService
             new_volume = newVolume,
             timestamp = DateTime.UtcNow
         };
-        await _producer.ProduceAsync(KafkaTopics.FuelAdded,
+        await _producer.ProduceAsync(KafkaTopics.FuelAddedFast,
             new Message<string, string> { Key = tankId, Value = JsonSerializer.Serialize(msg) });
     }
 }

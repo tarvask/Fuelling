@@ -1,6 +1,7 @@
-﻿using Confluent.Kafka;
+﻿using System.Globalization;
+using Confluent.Kafka;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using FuelStation.Shared;
 
 var config = new ConsumerConfig
 {
@@ -11,45 +12,60 @@ var config = new ConsumerConfig
 
 var configJson = File.ReadAllText("appsettings.json");
 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-options.Converters.Add(new JsonStringEnumConverter());
 var pricesConfig = JsonSerializer.Deserialize<PricesConfig>(configJson, options)!;
 
 using var consumer = new ConsumerBuilder<string, string>(config).Build();
-consumer.Subscribe("fueling-completed");
+consumer.Subscribe(KafkaTopics.FuellingCompleted);
 
-Console.WriteLine("PaymentService is listening to fueling‑completed...");
+Console.WriteLine($"PaymentService is listening to {KafkaTopics.FuellingCompleted}...");
 
 var cts = new CancellationTokenSource();
-Console.CancelKeyPress += (sender, e) =>
+Console.CancelKeyPress += (_, e) =>
 {
     e.Cancel = true;
     cts.Cancel();
     Console.WriteLine("Shutting down Payment Service...");
 };
 
-while (!cts.Token.IsCancellationRequested)
+try
 {
-    try
+    while (!cts.Token.IsCancellationRequested)
     {
-        var cr = consumer.Consume();
-        var payload = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(cr.Message.Value);
-        var sessionId = payload!["session_id"].GetString();
-        var fuelType = payload["fuel_type"].GetString();
-        var litres = payload["actual_litres"].GetDouble();
-        if (fuelType != null && pricesConfig.Prices.TryGetValue(fuelType, out var fuelPrice))
+        try
         {
-            var price = litres * fuelPrice;
-            Console.WriteLine($">>> BILL: session {sessionId}, {litres:F1}L of {fuelType}. Paid {price:F1}.");
+            var cr = consumer.Consume(cts.Token);
+            var payload = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(cr.Message.Value);
+            var sessionId = payload!["session_id"].GetString();
+            var fuelType = payload["fuel_type"].GetString();
+            var litres = payload["actual_litres"].GetDouble();
+            if (fuelType != null && pricesConfig.Prices.TryGetValue(fuelType, out var fuelPrice))
+            {
+                var price = litres * fuelPrice;
+                Console.WriteLine($">>> BILL: session {sessionId}, {litres.ToString("F1", CultureInfo.InvariantCulture)}L of {fuelType}. Paid {price.ToString("F1", CultureInfo.InvariantCulture)}.");
+            }
+            else
+            {
+                Console.WriteLine($">>> ERROR: bad fuelType {fuelType} in session {sessionId}.");
+            }
         }
-        else
+        catch (OperationCanceledException)
         {
-            Console.WriteLine($">>> ERROR: bad fuelType {fuelType} in session {sessionId}.");
+            // normal termination
+            break;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"PaymentService error: {ex.Message}");
         }
     }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"PaymentService error: {ex.Message}");
-    }
+}
+catch (OperationCanceledException)
+{
+    // normal termination
+}
+finally
+{
+    consumer.Close();
 }
 
 public class PricesConfig

@@ -1,5 +1,5 @@
 using Confluent.Kafka;
-using FuelStation.ReservationService.Constants;
+using FuelStation.Shared;
 
 namespace FuelStation.ReservationService.Services;
 
@@ -15,7 +15,12 @@ public class KafkaConsumerService : BackgroundService
         };
 
         var consumer = new ConsumerBuilder<string, string>(config).Build();
-        consumer.Subscribe(new[] { KafkaTopics.FuelingStarted, KafkaTopics.FuelingCompleted, KafkaTopics.FuelAdded });
+        consumer.Subscribe(new[]
+        {
+            KafkaTopics.FuellingStarted,
+            KafkaTopics.FuellingCompleted,
+            KafkaTopics.FuelAddedFast,
+        });
 
         return Task.Run(() =>
         {

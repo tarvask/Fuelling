@@ -13,4 +13,8 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\FuelStation.Shared\FuelStation.Shared.csproj" />
+  </ItemGroup>
+
 </Project>
