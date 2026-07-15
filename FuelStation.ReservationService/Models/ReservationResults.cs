@@ -39,3 +39,28 @@ public record AddFuelResult
     public static AddFuelResult Ok(string tankId, double newVolume) =>
         new() { Success = true, TankId = tankId, NewVolume = newVolume };
 }
+
+public record StartDeliveryResult
+{
+    public bool Success { get; private init; }
+    public string? SessionId { get; private init; }
+    public string? Error { get; private init; }
+
+    public static StartDeliveryResult Fail(string error) =>
+        new() { Success = false, Error = error };
+
+    public static StartDeliveryResult Ok(string sessionId) =>
+        new() { Success = true, SessionId = sessionId };
+}
+
+public record CompleteDeliveryResult
+{
+    public bool Success { get; private init; }
+    public string? Error { get; private init; }
+
+    public static CompleteDeliveryResult Fail(string error) =>
+        new() { Success = false, Error = error };
+
+    public static CompleteDeliveryResult Ok() =>
+        new() { Success = true };
+}

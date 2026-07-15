@@ -12,4 +12,7 @@ public static class ErrorMessages
     public const string FuellingSessionNotFound = "Fuelling session not found";
     public const string LitresMustBePositive = "Litres must be positive";
     public const string NoTankForFuelType = "No tank for this fuel type";
+
+    public const string DeliveryInProgress = "Delivery in progress";
+    public const string DeliverySessionNotFound = "Delivery session not found";
 }

@@ -15,6 +15,9 @@ service FuelReservation {
   rpc StartFuelling (StartFuellingRequest) returns (StartFuellingResponse);
   rpc CompleteFuelling  (CompleteFuellingRequest)  returns (CompleteFuellingResponse);
   rpc AddFuelFast      (AddFuelFastRequest) returns (AddFuelFastResponse);
+
+  rpc StartDelivery   (StartDeliveryRequest)   returns (StartDeliveryResponse);
+  rpc CompleteDelivery(CompleteDeliveryRequest) returns (CompleteDeliveryResponse);
 }
 
 message StartFuellingRequest {
@@ -51,4 +54,28 @@ message AddFuelFastResponse {
   string tank_id    = 2;
   double new_volume = 3;
   string error      = 4;
+}
+
+message StartDeliveryRequest {
+  repeated Compartment compartments = 1;
+}
+
+message StartDeliveryResponse {
+  bool success = 1;
+  string session_id = 2;
+  string error = 3;
+}
+
+message CompleteDeliveryRequest {
+  string session_id = 1;
+}
+
+message CompleteDeliveryResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message Compartment {
+  FuelType fuel_type = 1;
+  double litres = 2;
 }

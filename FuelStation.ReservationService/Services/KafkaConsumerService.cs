@@ -20,6 +20,8 @@ public class KafkaConsumerService : BackgroundService
             KafkaTopics.FuellingStarted,
             KafkaTopics.FuellingCompleted,
             KafkaTopics.FuelAddedFast,
+            KafkaTopics.DeliveryStarted,
+            KafkaTopics.DeliveryCompleted
         });
 
         return Task.Run(() =>

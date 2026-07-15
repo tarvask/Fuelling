@@ -56,4 +56,31 @@ public class KafkaProducerService
         await _producer.ProduceAsync(KafkaTopics.FuelAddedFast,
             new Message<string, string> { Key = tankId, Value = JsonSerializer.Serialize(msg) });
     }
+
+    public async Task SendDeliveryStartedEvent(string sessionId, List<Compartment> compartments)
+    {
+        var msg = new
+        {
+            session_id = sessionId,
+            compartments = compartments.Select(c => new
+            {
+                fuel_type = c.FuelType.ToString(),
+                litres = c.Litres
+            }),
+            timestamp = DateTime.UtcNow
+        };
+        await _producer.ProduceAsync(KafkaTopics.DeliveryStarted,
+            new Message<string, string> { Key = sessionId, Value = JsonSerializer.Serialize(msg) });
+    }
+
+    public async Task SendDeliveryCompletedEvent(string sessionId)
+    {
+        var msg = new
+        {
+            session_id = sessionId,
+            timestamp = DateTime.UtcNow
+        };
+        await _producer.ProduceAsync(KafkaTopics.DeliveryCompleted,
+            new Message<string, string> { Key = sessionId, Value = JsonSerializer.Serialize(msg) });
+    }
 }

@@ -10,6 +10,8 @@ public class ReservationManager
     private readonly ConcurrentDictionary<string, TankState> _tanks = new();
     private readonly ConcurrentDictionary<string, PumpState> _pumps = new();
     private readonly ConcurrentDictionary<string, FuellingSessionState> _sessions = new();
+    private readonly ConcurrentDictionary<string, DeliverySessionState> _deliveries = new();
+    private volatile bool _isDeliveryInProgress; 
     private readonly object _lock = new();
 
     public ReservationManager(StationConfig config)
@@ -33,6 +35,8 @@ public class ReservationManager
 
     public StartFuellingResult StartFuelling(string pumpId, FuelType fuelType, double preauthorizedLitres)
     {
+        if (_isDeliveryInProgress)
+            return StartFuellingResult.Fail(ErrorMessages.StationClosed);
 
         PumpState? pump;
         
@@ -134,12 +138,53 @@ public class ReservationManager
         }
     }
 
+    public StartDeliveryResult StartDelivery(List<Compartment> compartments)
     {
+        if (_isDeliveryInProgress)
+            return StartDeliveryResult.Fail(ErrorMessages.DeliveryInProgress);
 
         lock (_lock)
         {
+            if (_isDeliveryInProgress)
+                return StartDeliveryResult.Fail(ErrorMessages.DeliveryInProgress);
+            
+            _isDeliveryInProgress = true;
+            var sessionId = Guid.NewGuid().ToString();
+            _deliveries[sessionId] = new DeliverySessionState { Compartments = compartments };
+            return StartDeliveryResult.Ok(sessionId);
+        }
+    }
 
+    public CompleteDeliveryResult StopDelivery(string sessionId)
+    {
+        lock (_lock)
+        {
+            if (_deliveries.TryGetValue(sessionId, out var session) == false)
+                return CompleteDeliveryResult.Fail(ErrorMessages.DeliverySessionNotFound);
 
+            foreach (var compartment in session.Compartments)
+            {
+                var tanksCount = _tanks.Count(tank => tank.Value.FuelType == compartment.FuelType);
+
+                if (tanksCount == 0)
+                    continue;
+                
+                var fuelToAddForSingleTank = (decimal)compartment.Litres / tanksCount;
+                
+                foreach (var tank in _tanks)
+                {
+                    if (tank.Value.FuelType == compartment.FuelType)
+                    {
+                        var freeSpace = tank.Value.Capacity - tank.Value.CurrentVolume;
+                        var fuelToAdd = Math.Min(fuelToAddForSingleTank, freeSpace);
+                        tank.Value.CurrentVolume += fuelToAdd;
+                    }
+                }
+            }
+            
+            _deliveries.Remove(sessionId, out _);
+            _isDeliveryInProgress = false;
+            return CompleteDeliveryResult.Ok();
         }
     }
 

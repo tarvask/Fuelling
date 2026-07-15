@@ -32,6 +32,8 @@ using (var adminClient = new AdminClientBuilder(new AdminClientConfig { Bootstra
         KafkaTopics.FuellingStarted,
         KafkaTopics.FuellingCompleted,
         KafkaTopics.FuelAddedFast,
+        KafkaTopics.DeliveryStarted,
+        KafkaTopics.DeliveryCompleted
     };
     var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(10));
     var existing = metadata.Topics.Select(t => t.Topic).ToHashSet();

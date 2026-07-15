@@ -33,3 +33,8 @@ public class NozzleState
     public FuelType FuelType { get; init; }
     public string TankId { get; init; } = "";
 }
+
+public class DeliverySessionState
+{
+    public List<Compartment> Compartments { get; init; } = new();
+}

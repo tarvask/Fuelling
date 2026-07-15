@@ -55,6 +55,34 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
             Error = result.Error ?? string.Empty
         });
     }
+
+    public override Task<StartDeliveryResponse> StartDelivery(StartDeliveryRequest request, ServerCallContext context)
+    {
+        var compartments = request.Compartments.ToList();
+        var result = _manager.StartDelivery(compartments);
+
+        if (result.Success)
+            _ = _kafka.SendDeliveryStartedEvent(result.SessionId!, compartments);
+
+        return Task.FromResult(new StartDeliveryResponse
+        {
+            Success = result.Success,
+            SessionId = result.SessionId,
+            Error = result.Error ?? string.Empty
+        });
+    }
+
+    public override Task<CompleteDeliveryResponse> CompleteDelivery(CompleteDeliveryRequest request, ServerCallContext context)
+    {
+        var result = _manager.StopDelivery(request.SessionId);
+
+        if (result.Success)
+            _ = _kafka.SendDeliveryCompletedEvent(request.SessionId);
+
+        return Task.FromResult(new CompleteDeliveryResponse
+        {
+            Success = result.Success,
+            Error = result.Error ?? string.Empty
         });
     }
 }
