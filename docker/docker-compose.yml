@@ -21,3 +21,29 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9094
+      
+  postgres:
+    image: postgres:16-alpine
+    container_name: fuelstation-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fuelstation
+      POSTGRES_USER: fuelapp
+      POSTGRES_PASSWORD: ai100
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+        
+  redis:
+    image: redis:7-alpine
+    container_name: fuelstation-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
