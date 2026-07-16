@@ -1,9 +1,10 @@
 ﻿using Confluent.Kafka;
 using Confluent.Kafka.Admin;
-using FuelStation.ReservationService.Constants;
 using FuelStation.ReservationService.Services;
 using FuelStation.ReservationService.Models;
+using FuelStation.ReservationService.Persistence;
 using FuelStation.Shared;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.json", optional: false);
@@ -13,6 +14,8 @@ builder.Services.AddSingleton<ReservationManager>();
 builder.Services.AddSingleton<KafkaProducerService>();
 builder.Services.AddHostedService<KafkaConsumerService>();
 builder.Services.AddGrpc();
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -46,4 +49,9 @@ app.MapGrpcService<FuelReservationService>();
 app.MapGet("/", () => "ReservationService is running");
 
 Console.WriteLine("ReservationService gRPC + HTTP on http://localhost:5001");
+
+using var scope = app.Services.CreateScope();
+var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+db.Database.Migrate();
+
 app.Run();
