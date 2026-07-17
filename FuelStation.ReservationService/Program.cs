@@ -5,14 +5,16 @@ using FuelStation.ReservationService.Models;
 using FuelStation.ReservationService.Persistence;
 using FuelStation.Shared;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.json", optional: false);
 builder.Services.Configure<StationConfig>(builder.Configuration.GetSection("Station"));
-builder.Services.AddSingleton(sp => sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<StationConfig>>().Value);
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<StationConfig>>().Value);
 builder.Services.AddSingleton<ReservationManager>();
 builder.Services.AddSingleton<KafkaProducerService>();
 builder.Services.AddHostedService<KafkaConsumerService>();
+builder.Services.AddSingleton<DbInitializerService>();
 builder.Services.AddGrpc();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
@@ -51,7 +53,12 @@ app.MapGet("/", () => "ReservationService is running");
 Console.WriteLine("ReservationService gRPC + HTTP on http://localhost:5001");
 
 using var scope = app.Services.CreateScope();
-var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-db.Database.Migrate();
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+    var stationConfig = scope.ServiceProvider.GetRequiredService<IOptions<StationConfig>>().Value;
+    var dbInitService = scope.ServiceProvider.GetRequiredService<DbInitializerService>();
+    await dbInitService.InitDbFromConfig(db, stationConfig);
+}
 
 app.Run();

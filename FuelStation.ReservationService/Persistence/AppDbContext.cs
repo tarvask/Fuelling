@@ -11,6 +11,10 @@ public class AppDbContext : DbContext
     public DbSet<PumpEntity> Pumps => Set<PumpEntity>();
     public DbSet<NozzleEntity> Nozzles => Set<NozzleEntity>();
 
+    public DbSet<FuellingSessionEntity> FuellingSessions => Set<FuellingSessionEntity>();
+    public DbSet<DeliverySessionEntity> DeliverySessions => Set<DeliverySessionEntity>();
+    public DbSet<DeliveryCompartmentEntity> DeliveryCompartments => Set<DeliveryCompartmentEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<TankEntity>(entity =>
@@ -47,6 +51,54 @@ public class AppDbContext : DbContext
             entity.HasOne(n => n.Pump)
                 .WithMany(p => p.Nozzles)
                 .HasForeignKey(n => n.PumpId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<FuellingSessionEntity>(entity =>
+        {
+            entity.ToTable("fuelling_sessions");
+            entity.HasKey(s => s.Id);
+            entity.Property(s => s.FuelType)
+                .HasConversion<string>()
+                .HasMaxLength(8);
+
+            entity.Property(s => s.PumpId).IsRequired().HasMaxLength(50);
+            entity.Property(s => s.TankId).IsRequired().HasMaxLength(50);
+            entity.Property(s => s.ReservedVolume).HasPrecision(10, 2).IsRequired();
+            entity.Property(s => s.ActualVolume).HasPrecision(10, 2);
+            entity.Property(s => s.Status).IsRequired().HasMaxLength(20);
+            
+            entity.HasOne(s => s.Tank)
+                .WithMany()
+                .HasForeignKey(s => s.TankId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            entity.HasOne(s => s.Pump)
+                .WithMany()
+                .HasForeignKey(s => s.PumpId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+        
+        modelBuilder.Entity<DeliverySessionEntity>(entity =>
+        {
+            entity.ToTable("delivery_sessions");
+            entity.HasKey(e => e.Id);
+        });
+        
+        modelBuilder.Entity<DeliveryCompartmentEntity>(entity =>
+        {
+            entity.ToTable("delivery_compartments");
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.FuelType)
+                .HasConversion<string>()
+                .HasMaxLength(8);
+
+            entity.Property(e => e.Litres).IsRequired();
+            
+            entity.HasOne(e => e.DeliverySession)
+                .WithMany(s => s.Compartments)
+                .HasForeignKey(e => e.DeliverySessionId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

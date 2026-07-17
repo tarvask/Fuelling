@@ -1,7 +1,6 @@
 using Confluent.Kafka;
 using System.Text.Json;
 using Fuel;
-using FuelStation.ReservationService.Constants;
 using FuelStation.Shared;
 
 namespace FuelStation.ReservationService.Services;

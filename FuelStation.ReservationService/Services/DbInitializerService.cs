@@ -1,0 +1,47 @@
+using Fuel;
+using FuelStation.ReservationService.Models;
+using FuelStation.ReservationService.Persistence;
+using FuelStation.ReservationService.Persistence.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace FuelStation.ReservationService.Services;
+
+public class DbInitializerService
+{
+    public async Task InitDbFromConfig(AppDbContext db, StationConfig config)
+    {
+        if (await db.Tanks.AnyAsync())
+            return;
+
+        // tanks
+        var tankEntities = config.Tanks.Select(t => new TankEntity
+        {
+            Id = t.Id,
+            FuelType = Enum.Parse<FuelType>(t.FuelType, ignoreCase: true),
+            Capacity = t.Capacity,
+            CurrentVolume = t.CurrentVolume
+        });
+        db.Tanks.AddRange(tankEntities);
+
+        // pumps and nozzles
+        foreach (var pumpConfig in config.Pumps)
+        {
+            var pumpEntity = new PumpEntity { Id = pumpConfig.Id, IsBusy = false };
+            db.Pumps.Add(pumpEntity);
+            
+            foreach (var nozzleConfig in pumpConfig.Nozzles)
+            {
+                var nozzleEntity = new NozzleEntity
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    FuelType = Enum.Parse<FuelType>(nozzleConfig.FuelType, ignoreCase: true),
+                    TankId = nozzleConfig.TankId,
+                    PumpId = pumpConfig.Id
+                };
+                db.Nozzles.Add(nozzleEntity);
+            }
+        }
+
+        await db.SaveChangesAsync();
+    }
+}

@@ -1,64 +1,61 @@
-using System.Collections.Concurrent;
 using Fuel;
 using FuelStation.ReservationService.Constants;
 using FuelStation.ReservationService.Models;
+using FuelStation.ReservationService.Persistence;
+using FuelStation.ReservationService.Persistence.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace FuelStation.ReservationService.Services;
 
 public class ReservationManager
 {
-    private readonly ConcurrentDictionary<string, TankState> _tanks = new();
-    private readonly ConcurrentDictionary<string, PumpState> _pumps = new();
-    private readonly ConcurrentDictionary<string, FuellingSessionState> _sessions = new();
-    private readonly ConcurrentDictionary<string, DeliverySessionState> _deliveries = new();
+    private readonly IServiceScopeFactory _scopeFactory;
     private volatile bool _isDeliveryInProgress; 
     private readonly object _lock = new();
 
-    public ReservationManager(StationConfig config)
+    public ReservationManager(IServiceScopeFactory scopeFactory)
     {
-        foreach (var t in config.Tanks)
-            _tanks[t.Id] = new TankState
-            {
-                Id = t.Id,
-                FuelType = Enum.Parse<FuelType>(t.FuelType),
-                CurrentVolume = t.CurrentVolume,
-                Capacity = t.Capacity
-            };
-        foreach (var p in config.Pumps)
-            _pumps[p.Id] = new PumpState
-            {
-                Id = p.Id,
-                Nozzles = p.Nozzles.ConvertAll(CreateNozzleState),
-                IsBusy = false
-            };
+        _scopeFactory = scopeFactory;
     }
 
-    public StartFuellingResult StartFuelling(string pumpId, FuelType fuelType, double preauthorizedLitres)
+    public async Task<StartFuellingResult> StartFuellingAsync(string pumpId, FuelType fuelType, double preauthorizedLitres)
     {
         if (_isDeliveryInProgress)
-            return StartFuellingResult.Fail(ErrorMessages.StationClosed);
+            return StartFuellingResult.Fail(string.Format(ErrorMessages.StationClosed, fuelType));
 
-        PumpState? pump;
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        
+        PumpEntity? pump;
         
         if (string.IsNullOrEmpty(pumpId))
         {
-            if (TryGetSuitablePump(fuelType, out pump) == false)
-                return StartFuellingResult.Fail(ErrorMessages.PumpNotAutoSelected);
+            pump = await db.Pumps
+                .Include(p => p.Nozzles)
+                .ThenInclude(n => n.Tank)
+                .FirstOrDefaultAsync(p => p.IsBusy == false
+                                          && p.Nozzles.Any(n => n.FuelType == fuelType && n.Tank.CurrentVolume > 0));
+            
+            if (pump == null)
+                return StartFuellingResult.Fail(string.Format(ErrorMessages.PumpNotAutoSelected, fuelType));
         }
         else
         {
-            if (_pumps.TryGetValue(pumpId, out pump) == false)
+            pump = await db.Pumps
+                .Include(p => p.Nozzles)
+                .FirstOrDefaultAsync(p => p.Id == pumpId);
+            if (pump == null)
                 return StartFuellingResult.Fail(ErrorMessages.PumpNotFound);
-            
             if (pump.IsBusy)
                 return StartFuellingResult.Fail(ErrorMessages.PumpIsBusy);
         }
 
-        var nozzle = pump.Nozzles.Find(nozzleState => nozzleState.FuelType == fuelType);
+        var nozzle = pump.Nozzles.FirstOrDefault(n => n.FuelType == fuelType);
         if (nozzle == null)
             return StartFuellingResult.Fail(ErrorMessages.FuelTypeMismatch);
 
-        if (_tanks.TryGetValue(nozzle.TankId, out var tank) == false)
+        var tank = await db.Tanks.FindAsync(nozzle.TankId);
+        if (tank == null)
             return StartFuellingResult.Fail(ErrorMessages.TankNotFound);
         
         if (tank.CurrentVolume <= 0)
@@ -70,67 +67,97 @@ public class ReservationManager
             if (pump.IsBusy)
                 return StartFuellingResult.Fail(ErrorMessages.PumpIsBusy);
             
+            // double check
+            if (tank.CurrentVolume <= 0)
+                return StartFuellingResult.Fail(string.Format(ErrorMessages.NoFuelAvailable, tank.Id));
+            
             pump.IsBusy = true;
             decimal reserve = Math.Min((decimal)preauthorizedLitres, tank.CurrentVolume);
             tank.CurrentVolume -= reserve;
 
-            var session = new FuellingSessionState
+            var session = new FuellingSessionEntity
             {
                 Id = Guid.NewGuid().ToString(),
                 PumpId = pump.Id,
-                FuelType = fuelType,
                 TankId = tank.Id,
+                FuelType = fuelType,
                 ReservedVolume = reserve,
                 Status = SessionStatus.Reserved
             };
-            _sessions[session.Id] = session;
-
+            
+            db.FuellingSessions.Add(session);
+            db.SaveChanges();
             return StartFuellingResult.Ok(session.Id, (double)reserve);
         }
     }
 
-    public CompleteFuellingResult CompleteFuelling(string sessionId, double actualLitres)
+    public async Task<CompleteFuellingResult> CompleteFuellingAsync(string sessionId, double actualLitres)
     {
-        if (_sessions.TryGetValue(sessionId, out var session) == false)
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var session = await db.FuellingSessions.FindAsync(sessionId);
+        if (session == null)
             return CompleteFuellingResult.Fail(ErrorMessages.FuellingSessionNotFound);
 
-        if (_pumps.TryGetValue(session.PumpId, out var pump) == false)
-            return CompleteFuellingResult.Fail(ErrorMessages.PumpNotFound);
-
-        try
+        var pump = await db.Pumps.FindAsync(session.PumpId);
+        if (pump == null)
         {
-            lock (_lock)
-            {
-                if (_tanks.TryGetValue(session.TankId, out var tank) == false)
-                    return CompleteFuellingResult.Fail(ErrorMessages.TankNotFound);
-
-                decimal actual = Math.Min((decimal)actualLitres, session.ReservedVolume);
-                decimal leftover = session.ReservedVolume - actual;
-                tank.CurrentVolume += leftover;
-                
-                session.ActualVolume = actual;
-                session.Status = SessionStatus.Completed;
-                
-                _sessions.Remove(sessionId, out _);
-
-                return CompleteFuellingResult.Ok();
-            }
+            db.FuellingSessions.Remove(session);
+            await db.SaveChangesAsync();
+            return CompleteFuellingResult.Fail(ErrorMessages.PumpNotFound);
         }
-        finally
+        
+        var tank = await db.Tanks.FindAsync(session.TankId);
+        if (tank == null)
         {
             pump.IsBusy = false;
+            db.FuellingSessions.Remove(session);
+            await db.SaveChangesAsync();
+            return CompleteFuellingResult.Fail(ErrorMessages.TankNotFound);
+        }
+
+        if (session.Status != SessionStatus.Reserved)
+        {
+            pump.IsBusy = false;
+            db.FuellingSessions.Remove(session);
+            await db.SaveChangesAsync();
+            return CompleteFuellingResult.Fail(ErrorMessages.SessionAlreadyCompleted);
+        }
+        
+        lock (_lock)
+        {
+            decimal actual = Math.Min((decimal)actualLitres, session.ReservedVolume);
+            decimal leftover = session.ReservedVolume - actual;
+            tank.CurrentVolume += leftover;
+
+            session.ActualVolume = actual;
+            session.Status = SessionStatus.Completed;
+
+            pump.IsBusy = false;
+
+            db.FuellingSessions.Remove(session);
+            db.SaveChanges();
+            return CompleteFuellingResult.Ok();
         }
     }
 
-    public AddFuelResult AddFuelFast(FuelType fuelType, double litres)
+    public async Task<AddFuelResult> AddFuelFastAsync(FuelType fuelType, double litres)
     {
         if (litres <= 0) return AddFuelResult.Fail(ErrorMessages.LitresMustBePositive);
 
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        
+        var tank = await db.Tanks
+            .Where(t => t.FuelType == fuelType)
+            .OrderBy(t => t.CurrentVolume)
+            .FirstOrDefaultAsync();
+        if (tank == null)
+            return AddFuelResult.Fail(ErrorMessages.NoTankForFuelType);
+        
         lock (_lock)
         {
-            if (TryGetSuitableTank(fuelType, out var tank) == false)
-                return AddFuelResult.Fail(ErrorMessages.NoTankForFuelType);
-
             var freeSpace = tank.Capacity - tank.CurrentVolume;
             var fuelToAdd = Math.Min((decimal)litres, freeSpace);
             tank.CurrentVolume += fuelToAdd;
@@ -142,6 +169,9 @@ public class ReservationManager
     {
         if (_isDeliveryInProgress)
             return StartDeliveryResult.Fail(ErrorMessages.DeliveryInProgress);
+        
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         lock (_lock)
         {
@@ -149,92 +179,55 @@ public class ReservationManager
                 return StartDeliveryResult.Fail(ErrorMessages.DeliveryInProgress);
             
             _isDeliveryInProgress = true;
-            var sessionId = Guid.NewGuid().ToString();
-            _deliveries[sessionId] = new DeliverySessionState { Compartments = compartments };
-            return StartDeliveryResult.Ok(sessionId);
+            var session = new DeliverySessionEntity
+            {
+                Id = Guid.NewGuid().ToString(),
+                Compartments = compartments.Select(c => new DeliveryCompartmentEntity
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    FuelType = c.FuelType,
+                    Litres = c.Litres
+                }).ToList()
+            };
+            db.DeliverySessions.Add(session);
+            db.SaveChanges();
+            return StartDeliveryResult.Ok(session.Id);
         }
     }
 
-    public CompleteDeliveryResult StopDelivery(string sessionId)
+    public async Task<CompleteDeliveryResult> CompleteDeliveryAsync(string sessionId)
     {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var session = await db.DeliverySessions
+            .Include(s => s.Compartments)
+            .FirstOrDefaultAsync(s => s.Id == sessionId);
+        if (session == null)
+            return CompleteDeliveryResult.Fail(ErrorMessages.DeliverySessionNotFound);
+        
         lock (_lock)
         {
-            if (_deliveries.TryGetValue(sessionId, out var session) == false)
-                return CompleteDeliveryResult.Fail(ErrorMessages.DeliverySessionNotFound);
-
             foreach (var compartment in session.Compartments)
             {
-                var tanksCount = _tanks.Count(tank => tank.Value.FuelType == compartment.FuelType);
-
-                if (tanksCount == 0)
+                var tanks = db.Tanks.Where(t => t.FuelType == compartment.FuelType).ToList();
+                if (tanks.Count == 0)
                     continue;
                 
-                var fuelToAddForSingleTank = (decimal)compartment.Litres / tanksCount;
+                var fuelToAddForSingleTank = (decimal)compartment.Litres / tanks.Count;
                 
-                foreach (var tank in _tanks)
+                foreach (var tank in tanks)
                 {
-                    if (tank.Value.FuelType == compartment.FuelType)
-                    {
-                        var freeSpace = tank.Value.Capacity - tank.Value.CurrentVolume;
-                        var fuelToAdd = Math.Min(fuelToAddForSingleTank, freeSpace);
-                        tank.Value.CurrentVolume += fuelToAdd;
-                    }
+                    var freeSpace = tank.Capacity - tank.CurrentVolume;
+                    var fuelToAdd = Math.Min(fuelToAddForSingleTank, freeSpace);
+                    tank.CurrentVolume += fuelToAdd;
                 }
             }
             
-            _deliveries.Remove(sessionId, out _);
+            db.DeliverySessions.Remove(session);
+            db.SaveChanges();
             _isDeliveryInProgress = false;
             return CompleteDeliveryResult.Ok();
         }
-    }
-
-    private bool TryGetSuitablePump(FuelType fuelType, out PumpState suitablePump)
-    {
-        foreach (var pump in _pumps.Values)
-        {
-            if (pump.IsBusy) continue;
-
-            foreach (var nozzle in pump.Nozzles)
-            {
-                if (nozzle.FuelType != fuelType) continue;
-
-                if (_tanks[nozzle.TankId].CurrentVolume > 0)
-                {
-                    suitablePump = pump;
-                    return true;
-                }
-            }
-        }
-
-        suitablePump = null!;
-        return false;
-    }
-
-    private bool TryGetSuitableTank(FuelType fuelType, out TankState suitableTank)
-    {
-        var success = false;
-
-        var minCurrentVolume = decimal.MaxValue;
-        foreach (var tank in _tanks.Values)
-        {
-            if (tank.FuelType != fuelType) continue;
-            if (tank.CurrentVolume >= minCurrentVolume) continue;
-            
-            suitableTank = tank;
-            minCurrentVolume = tank.CurrentVolume;
-            success = true;
-        }
-
-        suitableTank = null!;
-        return success;
-    }
-    
-    private static NozzleState CreateNozzleState(NozzleConfig nozzleConfig)
-    {
-        return new NozzleState
-        {
-            FuelType = Enum.Parse<FuelType>(nozzleConfig.FuelType),
-            TankId = nozzleConfig.TankId
-        };
     }
 }
