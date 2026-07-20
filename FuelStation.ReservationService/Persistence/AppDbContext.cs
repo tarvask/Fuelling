@@ -32,7 +32,6 @@ public class AppDbContext : DbContext
         {
             entity.ToTable("pumps");
             entity.HasKey(p => p.Id);
-            entity.Property(p => p.IsBusy).IsRequired();
         });
 
         modelBuilder.Entity<NozzleEntity>(entity =>

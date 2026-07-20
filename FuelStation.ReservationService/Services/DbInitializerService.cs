@@ -26,7 +26,7 @@ public class DbInitializerService
         // pumps and nozzles
         foreach (var pumpConfig in config.Pumps)
         {
-            var pumpEntity = new PumpEntity { Id = pumpConfig.Id, IsBusy = false };
+            var pumpEntity = new PumpEntity { Id = pumpConfig.Id };
             db.Pumps.Add(pumpEntity);
             
             foreach (var nozzleConfig in pumpConfig.Nozzles)

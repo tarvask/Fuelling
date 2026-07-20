@@ -56,20 +56,20 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
         };
     }
 
-    public override Task<StartDeliveryResponse> StartDelivery(StartDeliveryRequest request, ServerCallContext context)
+    public override async Task<StartDeliveryResponse> StartDelivery(StartDeliveryRequest request, ServerCallContext context)
     {
         var compartments = request.Compartments.ToList();
-        var result = _manager.StartDelivery(compartments);
+        var result = await _manager.StartDeliveryAsync(compartments);
 
         if (result.Success)
             _ = _kafka.SendDeliveryStartedEvent(result.SessionId!, compartments);
 
-        return Task.FromResult(new StartDeliveryResponse
+        return new StartDeliveryResponse
         {
             Success = result.Success,
             SessionId = result.SessionId,
             Error = result.Error ?? string.Empty
-        });
+        };
     }
 
     public override async Task<CompleteDeliveryResponse> CompleteDelivery(CompleteDeliveryRequest request, ServerCallContext context)

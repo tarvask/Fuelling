@@ -22,6 +22,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.9" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
+    <PackageReference Include="StackExchange.Redis" Version="3.0.17" />
 
     <Protobuf Include="..\Contracts\fuel.proto" GrpcServices="Server" />
     <None Update="appsettings.json">

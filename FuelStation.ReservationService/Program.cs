@@ -1,11 +1,13 @@
 ﻿using Confluent.Kafka;
 using Confluent.Kafka.Admin;
+using FuelStation.ReservationService.Infrastructure;
 using FuelStation.ReservationService.Services;
 using FuelStation.ReservationService.Models;
 using FuelStation.ReservationService.Persistence;
 using FuelStation.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.json", optional: false);
@@ -18,6 +20,10 @@ builder.Services.AddSingleton<DbInitializerService>();
 builder.Services.AddGrpc();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+var redisConnectionString = builder.Configuration.GetValue<string>("Redis:ConnectionString");
+var multiplexer = ConnectionMultiplexer.Connect(redisConnectionString!);
+builder.Services.AddSingleton<IConnectionMultiplexer>(multiplexer);
+builder.Services.AddSingleton<RedisLockProvider>();
 
 builder.WebHost.ConfigureKestrel(options =>
 {
