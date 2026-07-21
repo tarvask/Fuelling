@@ -38,6 +38,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U fuelapp -d fuelstation" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
         
   redis:
     image: redis:7-alpine
@@ -47,6 +52,29 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+        
+  reservation-service:
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: ./FuelStation.ReservationService/Dockerfile
+    container_name: fuelstation-reservation
+    ports:
+      - "5001:5001"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__Default=Host=postgres;Port=5432;Database=fuelstation;Username=fuelapp;Password=ai100
+      - Redis__ConnectionString=redis:6379
+      - Kafka__BootstrapServers=kafka:9094
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
+    networks:
+      - default
 
 volumes:
   kafka_data:

@@ -18,16 +18,28 @@ builder.Services.AddSingleton<KafkaProducerService>();
 builder.Services.AddHostedService<KafkaConsumerService>();
 builder.Services.AddSingleton<DbInitializerService>();
 builder.Services.AddGrpc();
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
-var redisConnectionString = builder.Configuration.GetValue<string>("Redis:ConnectionString");
-var multiplexer = ConnectionMultiplexer.Connect(redisConnectionString!);
-builder.Services.AddSingleton<IConnectionMultiplexer>(multiplexer);
+builder.Services.AddSingleton<KafkaConfigurationProvider>();
+builder.Services.AddSingleton<PostgresConfigurationProvider>();
+builder.Services.AddSingleton<RedisConfigurationProvider>();
+
+builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
+{
+    var pgConfig = serviceProvider.GetRequiredService<PostgresConfigurationProvider>();
+    options.UseNpgsql(pgConfig.ConnectionString);
+});
+
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+{
+    var provider = sp.GetRequiredService<RedisConfigurationProvider>();
+    var config = ConfigurationOptions.Parse(provider.ConnectionString);
+    config.AbortOnConnectFail = false;
+    return ConnectionMultiplexer.Connect(config);
+});
 builder.Services.AddSingleton<RedisLockProvider>();
 
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenLocalhost(5001, listenOptions =>
+    options.ListenAnyIP(5001, listenOptions =>
     {
         listenOptions.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http2;
     });
@@ -36,7 +48,9 @@ builder.WebHost.ConfigureKestrel(options =>
 var app = builder.Build();
 
 // create Kafka topics before launching web host
-using (var adminClient = new AdminClientBuilder(new AdminClientConfig { BootstrapServers = "localhost:9092" }).Build())
+var kafkaConfigProvider = app.Services.GetRequiredService<KafkaConfigurationProvider>();
+var adminConfig = new AdminClientConfig { BootstrapServers = kafkaConfigProvider.BootstrapServers };
+using (var adminClient = new AdminClientBuilder(adminConfig).Build())
 {
     var topics = new[]
     {
@@ -48,7 +62,9 @@ using (var adminClient = new AdminClientBuilder(new AdminClientConfig { Bootstra
     };
     var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(10));
     var existing = metadata.Topics.Select(t => t.Topic).ToHashSet();
-    var toCreate = topics.Where(t => !existing.Contains(t)).Select(t => new TopicSpecification { Name = t, NumPartitions = 1, ReplicationFactor = 1 }).ToList();
+    var toCreate = topics.Where(t => existing.Contains(t) == false)
+        .Select(t => new TopicSpecification { Name = t, NumPartitions = 1, ReplicationFactor = 1 })
+        .ToList();
     if (toCreate.Any())
         await adminClient.CreateTopicsAsync(toCreate);
 }

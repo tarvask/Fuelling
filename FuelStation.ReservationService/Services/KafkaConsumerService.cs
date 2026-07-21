@@ -1,15 +1,24 @@
 using Confluent.Kafka;
+using FuelStation.ReservationService.Infrastructure;
 using FuelStation.Shared;
 
 namespace FuelStation.ReservationService.Services;
 
 public class KafkaConsumerService : BackgroundService
 {
+    private readonly string _bootstrapServers;
+
+    public KafkaConsumerService(KafkaConfigurationProvider kafkaConfigProvider)
+    {
+        Console.WriteLine($"[KafkaConsumerService] Kafka bootstrap servers: {kafkaConfigProvider.BootstrapServers}");
+        _bootstrapServers = kafkaConfigProvider.BootstrapServers;
+    }
+    
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var config = new ConsumerConfig
         {
-            BootstrapServers = "localhost:9092",
+            BootstrapServers = _bootstrapServers,
             GroupId = "reservation-service-logger",
             AutoOffsetReset = AutoOffsetReset.Earliest
         };

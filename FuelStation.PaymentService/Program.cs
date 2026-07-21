@@ -1,11 +1,14 @@
 ﻿using System.Globalization;
 using Confluent.Kafka;
 using System.Text.Json;
+using FuelStation.PaymentService.Infrastructure;
+using FuelStation.PaymentService.Models;
 using FuelStation.Shared;
 
+var kafkaConfigProvider = new KafkaConfigurationProvider();
 var config = new ConsumerConfig
 {
-    BootstrapServers = "localhost:9092",
+    BootstrapServers = kafkaConfigProvider.BootstrapServers,
     GroupId = "payment-service",
     AutoOffsetReset = AutoOffsetReset.Earliest
 };
@@ -66,9 +69,4 @@ catch (OperationCanceledException)
 finally
 {
     consumer.Close();
-}
-
-public class PricesConfig
-{
-    public Dictionary<string, double> Prices { get; set; } = new();
 }

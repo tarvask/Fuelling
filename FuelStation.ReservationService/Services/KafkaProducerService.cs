@@ -1,6 +1,7 @@
 using Confluent.Kafka;
 using System.Text.Json;
 using Fuel;
+using FuelStation.ReservationService.Infrastructure;
 using FuelStation.Shared;
 
 namespace FuelStation.ReservationService.Services;
@@ -9,9 +10,10 @@ public class KafkaProducerService
 {
     private readonly IProducer<string, string> _producer;
 
-    public KafkaProducerService()
+    public KafkaProducerService(KafkaConfigurationProvider kafkaConfigProvider)
     {
-        var config = new ProducerConfig { BootstrapServers = "localhost:9092" };
+        Console.WriteLine($"[KafkaProducerService] Kafka bootstrap servers: {kafkaConfigProvider.BootstrapServers}");
+        var config = new ProducerConfig { BootstrapServers = kafkaConfigProvider.BootstrapServers };
         _producer = new ProducerBuilder<string, string>(config).Build();
     }
 
