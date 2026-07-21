@@ -10,10 +10,8 @@ COPY Contracts/ ./Contracts/
 # restore dependencies
 RUN dotnet restore FuelStation.ReservationService/FuelStation.ReservationService.csproj
 
-# copy all other sources
+# copy all other sources and publish to /app directory
 COPY . .
-
-# publish to /app directory
 RUN dotnet publish FuelStation.ReservationService/FuelStation.ReservationService.csproj -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime

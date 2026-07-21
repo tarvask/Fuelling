@@ -75,6 +75,21 @@ services:
         condition: service_started
     networks:
       - default
+        
+  payment-service:
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: ./FuelStation.PaymentService/Dockerfile
+    container_name: fuelstation-payment
+    environment:
+      - Kafka__BootstrapServers=kafka:9094
+      - Grpc__GrpcAddress=http://reservation-service:5001
+    depends_on:
+      kafka:
+        condition: service_started
+      reservation-service:
+        condition: service_started
 
 volumes:
   kafka_data:

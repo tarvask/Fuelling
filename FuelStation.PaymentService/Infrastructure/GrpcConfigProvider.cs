@@ -2,9 +2,9 @@ using Microsoft.Extensions.Configuration;
 
 namespace FuelStation.PaymentService.Infrastructure;
 
-public class KafkaConfigurationProvider
+public class GrpcConfigProvider
 {
-    public KafkaConfigurationProvider()
+    public GrpcConfigProvider()
     {
         var basePath = AppContext.BaseDirectory;
         var configuration = new ConfigurationBuilder()
@@ -13,11 +13,11 @@ public class KafkaConfigurationProvider
             .AddEnvironmentVariables()
             .Build();
 
-        BootstrapServers =
-            Environment.GetEnvironmentVariable("Kafka__BootstrapServers")
-            ?? configuration.GetValue<string>("Kafka:BootstrapServers")
-            ?? "localhost:9092";
+        GrpcAddress =
+            Environment.GetEnvironmentVariable("Grpc__GrpcAddress")
+            ?? configuration.GetValue<string>("Grpc:GrpcAddress")
+            ?? "http://localhost:5001";
     }
 
-    public string BootstrapServers { get; }
+    public string GrpcAddress { get; }
 }
