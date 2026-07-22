@@ -5,6 +5,7 @@ using FuelStation.ReservationService.Services;
 using FuelStation.ReservationService.Models;
 using FuelStation.ReservationService.Persistence;
 using FuelStation.Shared;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
@@ -39,9 +40,16 @@ builder.Services.AddSingleton<RedisLockProvider>();
 
 builder.WebHost.ConfigureKestrel(options =>
 {
+    // gRPC port (only HTTP/2)
     options.ListenAnyIP(5001, listenOptions =>
     {
-        listenOptions.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http2;
+        listenOptions.Protocols = HttpProtocols.Http2;
+    });
+
+    // Healthcheck + REST port (only HTTP/1.1)
+    options.ListenAnyIP(5000, listenOptions =>
+    {
+        listenOptions.Protocols = HttpProtocols.Http1;
     });
 });
 

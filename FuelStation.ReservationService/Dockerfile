@@ -20,6 +20,12 @@ WORKDIR /app
 # copy published app
 COPY --from=build /app .
 
+# install curl for healthcheck
+# set root user to install curl and then step back
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+USER app
+
 # set port for Kestrel
 EXPOSE 5001
 ENV ASPNETCORE_URLS=http://+:5001

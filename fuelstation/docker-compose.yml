@@ -60,7 +60,8 @@ services:
       dockerfile: ./FuelStation.ReservationService/Dockerfile
     container_name: fuelstation-reservation
     ports:
-      - "5001:5001"
+      - "5001:5001"   # gRPC
+      #- "5000:5000"   # Healthcheck, no forwarding
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__Default=Host=postgres;Port=5432;Database=fuelstation;Username=fuelapp;Password=ai100
@@ -75,6 +76,12 @@ services:
         condition: service_started
     networks:
       - default
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
         
   payment-service:
     platform: linux/amd64
@@ -101,7 +108,7 @@ services:
       - Grpc__GrpcAddress=http://reservation-service:5001
     depends_on:
       reservation-service:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   kafka_data:
