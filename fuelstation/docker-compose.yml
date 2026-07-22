@@ -90,6 +90,18 @@ services:
         condition: service_started
       reservation-service:
         condition: service_started
+        
+  simulator:
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: ./FuelStation.Simulator/Dockerfile
+    container_name: fuelstation-simulator
+    environment:
+      - Grpc__GrpcAddress=http://reservation-service:5001
+    depends_on:
+      reservation-service:
+        condition: service_started
 
 volumes:
   kafka_data:

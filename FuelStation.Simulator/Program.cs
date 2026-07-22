@@ -2,6 +2,7 @@
 using System.Text.Json.Serialization;
 using Grpc.Net.Client;
 using Fuel;
+using FuelStation.Simulator.Infrastructure;
 using FuelStation.Simulator.Models;
 
 // ----- Configuration parsing (enum-compatible) -----
@@ -23,7 +24,7 @@ var rnd = new Random();
 
 var handler = new HttpClientHandler
 {
-    // Для локальной разработки без сертификатов
+    // for local development without certificates
     ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
 };
 var httpClient = new HttpClient(handler)
@@ -32,7 +33,8 @@ var httpClient = new HttpClient(handler)
     DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
 };
 
-var channel = GrpcChannel.ForAddress("http://localhost:5001", new GrpcChannelOptions
+var grpcConfigProvider = new GrpcConfigProvider();
+var channel = GrpcChannel.ForAddress(grpcConfigProvider.GrpcAddress, new GrpcChannelOptions
 {
     HttpClient = httpClient
 });
