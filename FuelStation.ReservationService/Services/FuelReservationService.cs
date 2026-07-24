@@ -16,10 +16,10 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
 
     public override async Task<StartFuellingResponse> StartFuelling(StartFuellingRequest request, ServerCallContext context)
     {
-        var result = await _manager.StartFuellingAsync(request.PumpId, request.FuelType, request.PreauthorizedLitres);
+        var result = await _manager.StartFuellingAsync(request.StationId, request.PumpId, request.FuelType, request.PreauthorizedLitres);
 
         if (result.Success)
-            _ = _kafka.SendFuellingStartedEvent(result.SessionId!, request.PumpId, request.FuelType.ToString(), result.ReservedLitres);
+            _ = _kafka.SendFuellingStartedEvent(request.StationId, result.SessionId!, request.PumpId, request.FuelType.ToString(), result.ReservedLitres);
 
         return new StartFuellingResponse
         {
@@ -32,20 +32,20 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
 
     public override async Task<CompleteFuellingResponse> CompleteFuelling(CompleteFuellingRequest request, ServerCallContext context)
     {
-        var result = await _manager.CompleteFuellingAsync(request.SessionId, request.ActualLitres);
+        var result = await _manager.CompleteFuellingAsync(request.StationId, request.SessionId, request.ActualLitres);
 
         if (result.Success)
-            _ = _kafka.SendFuellingCompletedEvent(request.SessionId, request.FuelType.ToString(), request.ActualLitres);
+            _ = _kafka.SendFuellingCompletedEvent(request.StationId, request.SessionId, request.FuelType.ToString(), request.ActualLitres);
 
         return new CompleteFuellingResponse { Success = result.Success, Error = result.Error ?? "" };
     }
 
     public override async Task<AddFuelFastResponse> AddFuelFast(AddFuelFastRequest request, ServerCallContext context)
     {
-        var result = await _manager.AddFuelFastAsync(Enum.Parse<FuelType>(request.FuelType), request.Litres);
+        var result = await _manager.AddFuelFastAsync(request.StationId, Enum.Parse<FuelType>(request.FuelType), request.Litres);
 
         if (result.Success)
-            _ = _kafka.SendFuelAddedFastEvent(result.TankId!, request.FuelType, request.Litres, result.NewVolume);
+            _ = _kafka.SendFuelAddedFastEvent(request.StationId, result.TankId!, request.FuelType, request.Litres, result.NewVolume);
 
         return new AddFuelFastResponse
         {
@@ -59,10 +59,10 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
     public override async Task<StartDeliveryResponse> StartDelivery(StartDeliveryRequest request, ServerCallContext context)
     {
         var compartments = request.Compartments.ToList();
-        var result = await _manager.StartDeliveryAsync(compartments);
+        var result = await _manager.StartDeliveryAsync(request.StationId, compartments);
 
         if (result.Success)
-            _ = _kafka.SendDeliveryStartedEvent(result.SessionId!, compartments);
+            _ = _kafka.SendDeliveryStartedEvent(request.StationId, result.SessionId!, compartments);
 
         return new StartDeliveryResponse
         {
@@ -74,10 +74,10 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
 
     public override async Task<CompleteDeliveryResponse> CompleteDelivery(CompleteDeliveryRequest request, ServerCallContext context)
     {
-        var result = await _manager.CompleteDeliveryAsync(request.SessionId);
+        var result = await _manager.CompleteDeliveryAsync(request.StationId, request.SessionId);
 
         if (result.Success)
-            _ = _kafka.SendDeliveryCompletedEvent(request.SessionId);
+            _ = _kafka.SendDeliveryCompletedEvent(request.StationId, request.SessionId);
 
         return new CompleteDeliveryResponse
         {

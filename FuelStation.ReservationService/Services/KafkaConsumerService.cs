@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Confluent.Kafka;
 using FuelStation.ReservationService.Infrastructure;
 using FuelStation.Shared;
@@ -40,7 +41,9 @@ public class KafkaConsumerService : BackgroundService
                 try
                 {
                     var cr = consumer.Consume(stoppingToken);
-                    Console.WriteLine($"[Kafka] {cr.Topic}: {cr.Message.Value}");
+                    var payload = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(cr.Message.Value);
+                    var stationId = payload != null && payload.TryGetValue("station_id", out var sid) ? sid.GetString() : "?";
+                    Console.WriteLine($"[Kafka] Station {stationId} | {cr.Topic}: {cr.Message.Value}");
                 }
                 catch (OperationCanceledException) { break; }
             }

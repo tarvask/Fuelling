@@ -6,4 +6,10 @@ public class TankEntity
     public Fuel.FuelType FuelType { get; set; }
     public decimal Capacity { get; set; }
     public decimal CurrentVolume { get; set; }
+    
+    // foreign keys
+    public string StationId { get; set; } = "";
+    
+    // nav fields
+    public StationEntity Station { get; set; } = null!;
 }

@@ -38,17 +38,18 @@ try
         {
             var cr = consumer.Consume(cts.Token);
             var payload = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(cr.Message.Value);
+            var stationId = payload!["station_id"].GetString();
             var sessionId = payload!["session_id"].GetString();
             var fuelType = payload["fuel_type"].GetString();
             var litres = payload["actual_litres"].GetDouble();
             if (fuelType != null && pricesConfig.Prices.TryGetValue(fuelType, out var fuelPrice))
             {
                 var price = litres * fuelPrice;
-                Console.WriteLine($">>> BILL: session {sessionId}, {litres.ToString("F1", CultureInfo.InvariantCulture)}L of {fuelType}. Paid {price.ToString("F1", CultureInfo.InvariantCulture)}.");
+                Console.WriteLine($">>> BILL: station {stationId}, session {sessionId}, {litres.ToString("F1", CultureInfo.InvariantCulture)}L of {fuelType}. Paid {price.ToString("F1", CultureInfo.InvariantCulture)}.");
             }
             else
             {
-                Console.WriteLine($">>> ERROR: bad fuelType {fuelType} in session {sessionId}.");
+                Console.WriteLine($">>> ERROR: bad fuelType {fuelType} in session {sessionId} at station {stationId}.");
             }
         }
         catch (OperationCanceledException)

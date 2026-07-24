@@ -12,7 +12,7 @@ using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.json", optional: false);
-builder.Services.Configure<StationConfig>(builder.Configuration.GetSection("Station"));
+builder.Services.Configure<FuelNetworkConfig>(builder.Configuration.GetSection("FuelNetwork"));
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<StationConfig>>().Value);
 builder.Services.AddSingleton<ReservationManager>();
 builder.Services.AddSingleton<KafkaProducerService>();
@@ -86,9 +86,9 @@ using var scope = app.Services.CreateScope();
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
-    var stationConfig = scope.ServiceProvider.GetRequiredService<IOptions<StationConfig>>().Value;
+    var fuelNetworkConfig = scope.ServiceProvider.GetRequiredService<IOptions<FuelNetworkConfig>>().Value;
     var dbInitService = scope.ServiceProvider.GetRequiredService<DbInitializerService>();
-    await dbInitService.InitDbFromConfig(db, stationConfig);
+    await dbInitService.InitDbFromConfig(db, fuelNetworkConfig);
 }
 
 app.Run();

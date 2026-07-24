@@ -22,8 +22,9 @@ service FuelReservation {
 
 message StartFuellingRequest {
   string pump_id              = 1; // empty string means auto-selection by server
-  FuelType fuel_type            = 2;
+  FuelType fuel_type          = 2;
   double preauthorized_litres = 3;
+  string station_id           = 4;
 }
 
 message StartFuellingResponse {
@@ -37,6 +38,7 @@ message CompleteFuellingRequest {
   string session_id    = 1;
   FuelType fuel_type   = 2;
   double actual_litres = 3;
+  string station_id    = 4;
 }
 
 message CompleteFuellingResponse {
@@ -47,6 +49,7 @@ message CompleteFuellingResponse {
 message AddFuelFastRequest {
   string fuel_type = 1;
   double litres    = 2;
+  string station_id = 3;
 }
 
 message AddFuelFastResponse {
@@ -58,6 +61,7 @@ message AddFuelFastResponse {
 
 message StartDeliveryRequest {
   repeated Compartment compartments = 1;
+  string station_id = 2;
 }
 
 message StartDeliveryResponse {
@@ -68,6 +72,7 @@ message StartDeliveryResponse {
 
 message CompleteDeliveryRequest {
   string session_id = 1;
+  string station_id = 2;
 }
 
 message CompleteDeliveryResponse {

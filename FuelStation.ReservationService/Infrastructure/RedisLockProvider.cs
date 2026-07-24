@@ -34,14 +34,6 @@ public class RedisLockProvider
     {
         await _db.StringSetAsync(RedisConstants.TankVolumeCacheKey(tankId), volume.ToString(CultureInfo.InvariantCulture));
     }
-
-    public async Task<decimal?> GetTankVolumeAsync(string tankId)
-    {
-        var value = await _db.StringGetAsync(RedisConstants.TankVolumeCacheKey(tankId));
-        if (value.HasValue && decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var volume))
-            return volume;
-        return null;
-    }
 }
 
 public record RedisLockToken(string Key, string Token);

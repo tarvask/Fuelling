@@ -22,7 +22,7 @@ public class ReservationManager
         _lockProvider = lockProvider;
     }
 
-    public async Task<StartFuellingResult> StartFuellingAsync(string? pumpId, FuelType fuelType, double preauthorizedLitres)
+    public async Task<StartFuellingResult> StartFuellingAsync(string stationId, string? pumpId, FuelType fuelType, double preauthorizedLitres)
     {
         if (_currentStationLock != null)
             return StartFuellingResult.Fail(string.Format(ErrorMessages.StationClosed, fuelType));
@@ -30,7 +30,7 @@ public class ReservationManager
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         
-        var (pump, pumpLock) = await SelectAndLockPumpAsync(db, pumpId, fuelType);
+        var (pump, pumpLock) = await SelectAndLockPumpAsync(db, stationId, pumpId, fuelType);
         if (pump == null || pumpLock == null)
             return StartFuellingResult.Fail(pumpLock == null
                 ? string.Format(ErrorMessages.PumpNotAutoSelected, fuelType)
@@ -67,6 +67,7 @@ public class ReservationManager
                 var session = new FuellingSessionEntity
                 {
                     Id = Guid.NewGuid().ToString(),
+                    StationId = stationId,
                     PumpId = pump.Id,
                     TankId = tank.Id,
                     FuelType = fuelType,
@@ -93,26 +94,26 @@ public class ReservationManager
         }
     }
 
-    public async Task<CompleteFuellingResult> CompleteFuellingAsync(string sessionId, double actualLitres)
+    public async Task<CompleteFuellingResult> CompleteFuellingAsync(string stationId, string sessionId, double actualLitres)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var session = await db.FuellingSessions.FindAsync(sessionId);
+        var session = await db.FuellingSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.StationId == stationId);
         if (session == null)
             return CompleteFuellingResult.Fail(ErrorMessages.FuellingSessionNotFound);
         
         RedisLockToken? pumpLock;
         _pumpLocks.TryGetValue(sessionId, out pumpLock);
 
-        var pump = await db.Pumps.FindAsync(session.PumpId);
+        var pump = await db.Pumps.FirstOrDefaultAsync(p => p.Id == session.PumpId && p.StationId == stationId);
         if (pump == null)
         {
             await ReleaseAndCleanupAsync(pumpLock, session, db, sessionId);
             return CompleteFuellingResult.Fail(ErrorMessages.PumpNotFound);
         }
         
-        var tank = await db.Tanks.FindAsync(session.TankId);
+        var tank = await db.Tanks.FirstOrDefaultAsync(t => t.Id == session.TankId && t.StationId == stationId);
         if (tank == null)
         {
             await ReleaseAndCleanupAsync(pumpLock, session, db, sessionId);
@@ -156,7 +157,7 @@ public class ReservationManager
         }
     }
 
-    public async Task<AddFuelResult> AddFuelFastAsync(FuelType fuelType, double litres)
+    public async Task<AddFuelResult> AddFuelFastAsync(string stationId, FuelType fuelType, double litres)
     {
         if (litres <= 0) return AddFuelResult.Fail(ErrorMessages.LitresMustBePositive);
 
@@ -164,7 +165,7 @@ public class ReservationManager
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         
         var tank = await db.Tanks
-            .Where(t => t.FuelType == fuelType)
+            .Where(t => t.StationId == stationId && t.FuelType == fuelType)
             .OrderBy(t => t.CurrentVolume)
             .FirstOrDefaultAsync();
         if (tank == null)
@@ -195,7 +196,7 @@ public class ReservationManager
         }
     }
 
-    public async Task<StartDeliveryResult> StartDeliveryAsync(List<Compartment> compartments)
+    public async Task<StartDeliveryResult> StartDeliveryAsync(string stationId, List<Compartment> compartments)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -212,6 +213,7 @@ public class ReservationManager
             var session = new DeliverySessionEntity
             {
                 Id = Guid.NewGuid().ToString(),
+                StationId = stationId,
                 Compartments = compartments.Select(c => new DeliveryCompartmentEntity
                 {
                     Id = Guid.NewGuid().ToString(),
@@ -231,14 +233,14 @@ public class ReservationManager
         }
     }
 
-    public async Task<CompleteDeliveryResult> CompleteDeliveryAsync(string sessionId)
+    public async Task<CompleteDeliveryResult> CompleteDeliveryAsync(string stationId, string sessionId)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var session = await db.DeliverySessions
             .Include(s => s.Compartments)
-            .FirstOrDefaultAsync(s => s.Id == sessionId);
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.StationId == stationId);
         if (session == null)
             return CompleteDeliveryResult.Fail(ErrorMessages.DeliverySessionNotFound);
 
@@ -253,7 +255,7 @@ public class ReservationManager
         {
             foreach (var compartment in session.Compartments)
             {
-                var tanks = db.Tanks.Where(t => t.FuelType == compartment.FuelType).ToList();
+                var tanks = db.Tanks.Where(t => t.StationId == stationId && t.FuelType == compartment.FuelType).ToList();
                 if (tanks.Count == 0)
                     continue;
                 
@@ -302,14 +304,14 @@ public class ReservationManager
     }
     
     private async Task<(PumpEntity? pump, RedisLockToken? lockToken)> SelectAndLockPumpAsync(
-        AppDbContext db, string? pumpId, FuelType fuelType)
+        AppDbContext db, string stationId, string? pumpId, FuelType fuelType)
     {
         RedisLockToken? pumpLock;
         if (string.IsNullOrEmpty(pumpId))
         {
             var candidates = await db.Pumps
                 .Include(p => p.Nozzles).ThenInclude(n => n.Tank)
-                .Where(p => p.Nozzles.Any(n => n.FuelType == fuelType && n.Tank.CurrentVolume > 0))
+                .Where(p => p.StationId == stationId && p.Nozzles.Any(n => n.FuelType == fuelType && n.Tank.CurrentVolume > 0))
                 .ToListAsync();
 
             foreach (var candidate in candidates)
@@ -324,7 +326,7 @@ public class ReservationManager
 
         var pump = await db.Pumps
             .Include(p => p.Nozzles).ThenInclude(n => n.Tank)
-            .FirstOrDefaultAsync(p => p.Id == pumpId);
+            .FirstOrDefaultAsync(p => p.StationId == stationId && p.Id == pumpId);
         if (pump == null)
             return (null, null);
 

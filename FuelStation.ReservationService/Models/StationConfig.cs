@@ -1,7 +1,15 @@
 namespace FuelStation.ReservationService.Models;
 
+public class FuelNetworkConfig
+{
+    public List<StationConfig> Stations { get; init; } = new();
+}
+
 public class StationConfig
 {
+    public string Id { get; init; } = "";
+    public string Name { get; init; } = "";
+    public string Address { get; init; } = "";
     public List<TankConfig> Tanks { get; init; } = new();
     public List<PumpConfig> Pumps { get; init; } = new();
 }

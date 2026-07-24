@@ -5,6 +5,8 @@ using Fuel;
 using FuelStation.Simulator.Infrastructure;
 using FuelStation.Simulator.Models;
 
+const string DefaultStation = "LUK-01";
+
 // ----- Configuration parsing (enum-compatible) -----
 var configJson = File.ReadAllText("appsettings.json");
 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -12,7 +14,6 @@ options.Converters.Add(new JsonStringEnumConverter());
 var simConfig = JsonSerializer.Deserialize<SimulationConfig>(configJson, options)!;
 
 var sim = simConfig.Simulation;
-var pumps = sim.Pumps;
 var probs = sim.FuelProbabilities;
 var speedFactor = sim.SpeedFactor;
 var minLitres = sim.MinLitres;
@@ -79,12 +80,13 @@ Console.CancelKeyPress += (sender, e) =>
 
 while (!cts.Token.IsCancellationRequested)
 {
-    var fuelRequest = CreateRandomFuelData(probs, minLitres, maxLitres, rnd);
+    var fuelRequest = CreateRandomFuelData(probs, DefaultStation, minLitres, maxLitres, rnd);
 
     try
     {
         var startReply = await client.StartFuellingAsync(new StartFuellingRequest
         {
+            StationId = fuelRequest.StationId,
             PumpId = string.Empty,
             FuelType = fuelRequest.FuelType,
             PreauthorizedLitres = fuelRequest.Litres
@@ -103,6 +105,7 @@ while (!cts.Token.IsCancellationRequested)
 
             var stopReply = await client.CompleteFuellingAsync(new CompleteFuellingRequest
             {
+                StationId = fuelRequest.StationId,
                 SessionId = startReply.SessionId,
                 FuelType = fuelRequest.FuelType,
                 ActualLitres = startReply.ReservedLitres
@@ -123,7 +126,7 @@ while (!cts.Token.IsCancellationRequested)
 }
 
 static FuelRequest CreateRandomFuelData(
-    Dictionary<FuelType, double> probabilities, int minLitres, int maxLitres, Random rnd)
+    Dictionary<FuelType, double> probabilities, string stationId, int minLitres, int maxLitres, Random rnd)
 {
     double dice = rnd.NextDouble();
     double cumulative = 0;
@@ -135,7 +138,7 @@ static FuelRequest CreateRandomFuelData(
     }
 
     double litres = rnd.Next(minLitres, maxLitres + 1);
-    return new FuelRequest(selectedFuel, litres);
+    return new FuelRequest(stationId, selectedFuel, litres);
 }
 
-public record FuelRequest(FuelType FuelType, double Litres);
+public record FuelRequest(string StationId, FuelType FuelType, double Litres);
