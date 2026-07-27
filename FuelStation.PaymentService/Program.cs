@@ -9,7 +9,7 @@ var kafkaConfigProvider = new KafkaConfigurationProvider();
 var config = new ConsumerConfig
 {
     BootstrapServers = kafkaConfigProvider.BootstrapServers,
-    GroupId = "payment-service",
+    GroupId = KafkaGroups.PaymentService,
     AutoOffsetReset = AutoOffsetReset.Earliest
 };
 
@@ -38,10 +38,10 @@ try
         {
             var cr = consumer.Consume(cts.Token);
             var payload = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(cr.Message.Value);
-            var stationId = payload!["station_id"].GetString();
-            var sessionId = payload!["session_id"].GetString();
-            var fuelType = payload["fuel_type"].GetString();
-            var litres = payload["actual_litres"].GetDouble();
+            var stationId = payload![KafkaMessageKeys.StationId].GetString();
+            var sessionId = payload![KafkaMessageKeys.SessionId].GetString();
+            var fuelType = payload[KafkaMessageKeys.FuelType].GetString();
+            var litres = payload[KafkaMessageKeys.ActualLitres].GetDouble();
             if (fuelType != null && pricesConfig.Prices.TryGetValue(fuelType, out var fuelPrice))
             {
                 var price = litres * fuelPrice;

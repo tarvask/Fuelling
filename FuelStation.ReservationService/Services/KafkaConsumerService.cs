@@ -20,7 +20,7 @@ public class KafkaConsumerService : BackgroundService
         var config = new ConsumerConfig
         {
             BootstrapServers = _bootstrapServers,
-            GroupId = "reservation-service-logger",
+            GroupId = KafkaGroups.ReservationServiceLogger,
             AutoOffsetReset = AutoOffsetReset.Earliest
         };
 
@@ -42,7 +42,7 @@ public class KafkaConsumerService : BackgroundService
                 {
                     var cr = consumer.Consume(stoppingToken);
                     var payload = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(cr.Message.Value);
-                    var stationId = payload != null && payload.TryGetValue("station_id", out var sid) ? sid.GetString() : "?";
+                    var stationId = payload != null && payload.TryGetValue(KafkaMessageKeys.StationId, out var sid) ? sid.GetString() : "?";
                     Console.WriteLine($"[Kafka] Station {stationId} | {cr.Topic}: {cr.Message.Value}");
                 }
                 catch (OperationCanceledException) { break; }

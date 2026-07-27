@@ -19,74 +19,74 @@ public class KafkaProducerService
 
     public async Task SendFuellingStartedEvent(string stationId, string sessionId, string pumpId, string fuelType, double reservedLitres)
     {
-        var msg = new
+        var message = new Dictionary<string,object>
         {
-            station_id = stationId,
-            session_id = sessionId,
-            pump_id = pumpId,
-            fuel_type = fuelType,
-            reserved_litres = reservedLitres,
-            timestamp = DateTime.UtcNow
+            { KafkaMessageKeys.StationId, stationId },
+            { KafkaMessageKeys.SessionId, sessionId },
+            { KafkaMessageKeys.PumpId, pumpId },
+            { KafkaMessageKeys.FuelType, fuelType },
+            { KafkaMessageKeys.ReservedLitres, reservedLitres },
+            { KafkaMessageKeys.Timestamp, DateTime.UtcNow }
         };
         await _producer.ProduceAsync(KafkaTopics.FuellingStarted,
-            new Message<string, string> { Key = sessionId, Value = JsonSerializer.Serialize(msg) });
+            new Message<string, string> { Key = sessionId, Value = JsonSerializer.Serialize(message) });
     }
 
     public async Task SendFuellingCompletedEvent(string stationId, string sessionId, string fuelType, double actualLitres)
     {
-        var msg = new
+        var message = new Dictionary<string,object>
         {
-            station_id = stationId,
-            session_id = sessionId,
-            fuel_type = fuelType,
-            actual_litres = actualLitres,
-            timestamp = DateTime.UtcNow
+            { KafkaMessageKeys.StationId, stationId },
+            { KafkaMessageKeys.SessionId, sessionId },
+            { KafkaMessageKeys.FuelType, fuelType },
+            { KafkaMessageKeys.ActualLitres, actualLitres },
+            { KafkaMessageKeys.Timestamp, DateTime.UtcNow }
         };
         await _producer.ProduceAsync(KafkaTopics.FuellingCompleted,
-            new Message<string, string> { Key = sessionId, Value = JsonSerializer.Serialize(msg) });
+            new Message<string, string> { Key = sessionId, Value = JsonSerializer.Serialize(message) });
     }
 
     public async Task SendFuelAddedFastEvent(string stationId, string tankId, string fuelType, double litres, double newVolume)
     {
-        var msg = new
+        var message = new Dictionary<string,object>
         {
-            station_dd = stationId,
-            tank_id = tankId,
-            fuel_type = fuelType,
-            litres = litres,
-            new_volume = newVolume,
-            timestamp = DateTime.UtcNow
+            { KafkaMessageKeys.StationId, stationId },
+            { KafkaMessageKeys.TankId, tankId },
+            { KafkaMessageKeys.FuelType, fuelType },
+            { KafkaMessageKeys.Litres, litres },
+            { KafkaMessageKeys.NewVolume, newVolume },
+            { KafkaMessageKeys.Timestamp, DateTime.UtcNow }
         };
         await _producer.ProduceAsync(KafkaTopics.FuelAddedFast,
-            new Message<string, string> { Key = tankId, Value = JsonSerializer.Serialize(msg) });
+            new Message<string, string> { Key = tankId, Value = JsonSerializer.Serialize(message) });
     }
 
     public async Task SendDeliveryStartedEvent(string stationId, string sessionId, List<Compartment> compartments)
     {
-        var msg = new
+        var message = new Dictionary<string,object>
         {
-            station_id = stationId,
-            session_id = sessionId,
-            compartments = compartments.Select(c => new
+            { KafkaMessageKeys.StationId, stationId },
+            { KafkaMessageKeys.SessionId, sessionId },
+            { KafkaMessageKeys.Compartments, compartments.Select(c => new Dictionary<string,object>
             {
-                fuel_type = c.FuelType.ToString(),
-                litres = c.Litres
-            }),
-            timestamp = DateTime.UtcNow
+                { KafkaMessageKeys.FuelType, c.FuelType.ToString() },
+                { KafkaMessageKeys.Litres, c.Litres }
+            })},
+            { KafkaMessageKeys.Timestamp, DateTime.UtcNow }
         };
         await _producer.ProduceAsync(KafkaTopics.DeliveryStarted,
-            new Message<string, string> { Key = sessionId, Value = JsonSerializer.Serialize(msg) });
+            new Message<string, string> { Key = sessionId, Value = JsonSerializer.Serialize(message) });
     }
 
     public async Task SendDeliveryCompletedEvent(string stationId, string sessionId)
     {
-        var msg = new
-        {
-            station_id = stationId,
-            session_id = sessionId,
-            timestamp = DateTime.UtcNow
+        var message = new Dictionary<string,object> 
+        { 
+            { KafkaMessageKeys.StationId, stationId },
+            { KafkaMessageKeys.SessionId, sessionId },
+            { KafkaMessageKeys.Timestamp, DateTime.UtcNow }
         };
         await _producer.ProduceAsync(KafkaTopics.DeliveryCompleted,
-            new Message<string, string> { Key = sessionId, Value = JsonSerializer.Serialize(msg) });
+            new Message<string, string> { Key = sessionId, Value = JsonSerializer.Serialize(message) });
     }
 }
