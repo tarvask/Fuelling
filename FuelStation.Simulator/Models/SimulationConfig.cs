@@ -4,11 +4,6 @@ namespace FuelStation.Simulator.Models;
 
 public class SimulationConfig
 {
-    public SimulationSection Simulation { get; init; } = new();
-}
-
-public class SimulationSection
-{
     public int SpeedFactor { get; init; }
     public Dictionary<FuelType, double> FuelProbabilities { get; init; } = new();
     public int MinLitres { get; init; }

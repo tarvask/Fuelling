@@ -98,14 +98,67 @@ services:
       reservation-service:
         condition: service_started
         
-  simulator:
+  simulator-luk01:
     platform: linux/amd64
     build:
       context: ..
       dockerfile: ./FuelStation.Simulator/Dockerfile
-    container_name: fuelstation-simulator
+    container_name: fuelstation-simulator-luk01
     environment:
       - Grpc__GrpcAddress=http://reservation-service:5001
+      - Simulation__StationId=LUK-01
+    depends_on:
+      reservation-service:
+        condition: service_healthy
+        
+  simulator-luk02:
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: ./FuelStation.Simulator/Dockerfile
+    container_name: fuelstation-simulator-luk02
+    environment:
+      - Grpc__GrpcAddress=http://reservation-service:5001
+      - Simulation__StationId=LUK-02
+    depends_on:
+      reservation-service:
+        condition: service_healthy
+        
+  simulator-gaz01:
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: ./FuelStation.Simulator/Dockerfile
+    container_name: fuelstation-simulator-gaz01
+    environment:
+      - Grpc__GrpcAddress=http://reservation-service:5001
+      - Simulation__StationId=GAZ-01
+    depends_on:
+      reservation-service:
+        condition: service_healthy
+        
+  simulator-ros01:
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: ./FuelStation.Simulator/Dockerfile
+    container_name: fuelstation-simulator-ros01
+    environment:
+      - Grpc__GrpcAddress=http://reservation-service:5001
+      - Simulation__StationId=ROS-01
+    depends_on:
+      reservation-service:
+        condition: service_healthy
+        
+  simulator-luk03:
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: ./FuelStation.Simulator/Dockerfile
+    container_name: fuelstation-simulator-luk03
+    environment:
+      - Grpc__GrpcAddress=http://reservation-service:5001
+      - Simulation__StationId=LUK-03
     depends_on:
       reservation-service:
         condition: service_healthy

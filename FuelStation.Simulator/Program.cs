@@ -1,25 +1,26 @@
-﻿using System.Text.Json;
-using System.Text.Json.Serialization;
-using Grpc.Net.Client;
+﻿using Grpc.Net.Client;
 using Fuel;
 using FuelStation.Simulator.Infrastructure;
 using FuelStation.Simulator.Models;
+using Microsoft.Extensions.Configuration;
 
-const string DefaultStation = "LUK-01";
+var basePath = AppContext.BaseDirectory;
+var configuration = new ConfigurationBuilder()
+    .SetBasePath(basePath)
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddEnvironmentVariables()
+    .Build();
 
-// ----- Configuration parsing (enum-compatible) -----
-var configJson = File.ReadAllText("appsettings.json");
-var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-options.Converters.Add(new JsonStringEnumConverter());
-var simConfig = JsonSerializer.Deserialize<SimulationConfig>(configJson, options)!;
+var simulationConfig = configuration.GetSection("Simulation").Get<SimulationConfig>();
+if (simulationConfig == null)
+{
+    Console.WriteLine("Error: simulation section not set in appsettings.json");
+    Console.WriteLine("Terminating...");
+    return;
+}
 
-var sim = simConfig.Simulation;
-var probs = sim.FuelProbabilities;
-var speedFactor = sim.SpeedFactor;
-var minLitres = sim.MinLitres;
-var maxLitres = sim.MaxLitres;
-var minIntervalMin = sim.MinIntervalVirtualMinutes;
-var maxIntervalMin = sim.MaxIntervalVirtualMinutes;
+var stationIdProvider = new StationIdProvider(configuration);
+var stationId = stationIdProvider.StationId;
 
 var rnd = new Random();
 
@@ -53,20 +54,20 @@ int GetTotalFuelingProcessDurationMs(double litres)
 int GetHumanFactorDurationMs()
 {
     int virtualMinutes = rnd.Next(1, 5);                // 1–4 minutes of fueling
-    return virtualMinutes * 60 * 1000 / speedFactor;    // convert to real milliseconds
+    return virtualMinutes * 60 * 1000 / simulationConfig.SpeedFactor;    // convert to real milliseconds
 }
 
 int GetFuelingDurationFromVolumeMs(double litres)
 {
-    double pumpSpeed = simConfig.Simulation.PumpSpeedLitresPerMinute;
+    double pumpSpeed = simulationConfig.PumpSpeedLitresPerMinute;
     int virtualMinutes = (int)Math.Ceiling(litres / pumpSpeed);
-    return virtualMinutes * 60 * 1000 / speedFactor;
+    return virtualMinutes * 60 * 1000 / simulationConfig.SpeedFactor;
 }
 
 int GetInterCarIntervalMs()
 {
-    int virtualMinutes = rnd.Next(minIntervalMin, maxIntervalMin + 1);
-    return virtualMinutes * 60 * 1000 / speedFactor;
+    int virtualMinutes = rnd.Next(simulationConfig.MinIntervalVirtualMinutes, simulationConfig.MaxIntervalVirtualMinutes + 1);
+    return virtualMinutes * 60 * 1000 / simulationConfig.SpeedFactor;
 }
 
 // ----- Main simulation loop -----
@@ -80,7 +81,7 @@ Console.CancelKeyPress += (sender, e) =>
 
 while (!cts.Token.IsCancellationRequested)
 {
-    var fuelRequest = CreateRandomFuelData(probs, DefaultStation, minLitres, maxLitres, rnd);
+    var fuelRequest = CreateRandomFuelData(simulationConfig.FuelProbabilities, stationId, simulationConfig.MinLitres, simulationConfig.MaxLitres, rnd);
 
     try
     {
