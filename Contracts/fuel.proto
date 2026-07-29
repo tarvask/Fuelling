@@ -17,7 +17,9 @@ service FuelReservation {
   rpc AddFuelFast      (AddFuelFastRequest) returns (AddFuelFastResponse);
 
   rpc StartDelivery   (StartDeliveryRequest)   returns (StartDeliveryResponse);
-  rpc CompleteDelivery(CompleteDeliveryRequest) returns (CompleteDeliveryResponse);
+  rpc CompleteDelivery (CompleteDeliveryRequest) returns (CompleteDeliveryResponse);
+  
+  rpc GetStations (GetStationsRequest) returns (GetStationsResponse);
 }
 
 message StartFuellingRequest {
@@ -83,4 +85,18 @@ message CompleteDeliveryResponse {
 message Compartment {
   FuelType fuel_type = 1;
   double litres = 2;
+}
+
+message GetStationsRequest {
+  // no parameters yet
+}
+
+message StationInfo {
+  string id = 1;
+  string name = 2;
+  string address = 3;
+}
+
+message GetStationsResponse {
+  repeated StationInfo stations = 1;
 }

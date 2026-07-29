@@ -302,6 +302,21 @@ public class ReservationManager
             }
         }
     }
+
+    public async Task<List<StationInfo>> GetStationsAsync()
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        return await db.Stations
+            .Select(s => new StationInfo
+            {
+                Id = s.Id,
+                Name = s.Name,
+                Address = s.Address
+            })
+            .ToListAsync();
+    }
     
     private async Task<(PumpEntity? pump, RedisLockToken? lockToken)> SelectAndLockPumpAsync(
         AppDbContext db, string stationId, string? pumpId, FuelType fuelType)

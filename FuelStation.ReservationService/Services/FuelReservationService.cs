@@ -85,4 +85,12 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
             Error = result.Error ?? string.Empty
         };
     }
+
+    public override async Task<GetStationsResponse> GetStations(GetStationsRequest request, ServerCallContext context)
+    {
+        var stations = await _manager.GetStationsAsync();
+        var response = new GetStationsResponse();
+        response.Stations.AddRange(stations);
+        return response;
+    }
 }
