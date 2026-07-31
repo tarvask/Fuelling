@@ -1,7 +1,7 @@
-﻿using Avalonia;
-using System;
+﻿using System;
+using Avalonia;
 
-namespace FuelStation.FuelSupplyServiceUI;
+namespace FuelStation.SupplyServiceUI;
 
 sealed class Program
 {

@@ -13,7 +13,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FuelStation.SupplyService",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FuelStation.Shared", "FuelStation.Shared\FuelStation.Shared.csproj", "{E4899FBA-06C1-421C-8E05-5916BFE03A0E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FuelStation.FuelSupplyServiceUI", "FuelStation.FuelSupplyServiceUI\FuelStation.FuelSupplyServiceUI.csproj", "{4159E4FE-B041-410F-ADF6-1D6A35415696}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FuelStation.SupplyServiceUI", "FuelStation.SupplyServiceUI\FuelStation.SupplyServiceUI.csproj", "{4159E4FE-B041-410F-ADF6-1D6A35415696}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -2,9 +2,9 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
-using FuelStation.FuelSupplyServiceUI.ViewModels;
+using FuelStation.SupplyServiceUI.ViewModels;
 
-namespace FuelStation.FuelSupplyServiceUI;
+namespace FuelStation.SupplyServiceUI;
 
 /// <summary>
 /// Given a view model, returns the corresponding view if possible.

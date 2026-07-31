@@ -1,10 +1,10 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using FuelStation.FuelSupplyServiceUI.ViewModels;
-using FuelStation.FuelSupplyServiceUI.Views;
+using FuelStation.SupplyServiceUI.ViewModels;
+using FuelStation.SupplyServiceUI.Views;
 
-namespace FuelStation.FuelSupplyServiceUI;
+namespace FuelStation.SupplyServiceUI;
 
 public partial class App : Application
 {

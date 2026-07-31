@@ -1,0 +1,42 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:viewModels="clr-namespace:FuelStation.SupplyServiceUI.ViewModels"
+        x:Class="FuelStation.SupplyServiceUI.Views.TankerSelectionDialog"
+        x:DataType="viewModels:TankerSelectionViewModel"
+        Title="Choose tanker"
+        Width="500" Height="420"
+        CanResize="false"
+        WindowStartupLocation="CenterScreen">
+
+    <Design.DataContext>
+        <viewModels:TankerSelectionViewModel />
+    </Design.DataContext>
+
+    <StackPanel Orientation="Vertical">
+        <TextBlock Text="Choose tanker for delivery:"
+                   FontSize="16" Margin="10" />
+
+        <ListBox ItemsSource="{Binding Tankers}"
+                 SelectedItem="{Binding SelectedTanker}"
+                 Margin="10"
+                 VerticalAlignment="Top"
+                 Height="300">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="viewModels:TankerViewModel">
+                    <StackPanel Margin="5">
+                        <TextBlock Text="{Binding Name}" FontWeight="Bold" />
+                        <TextBlock Text="{Binding Summary}" Foreground="Gray" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <StackPanel Orientation="Horizontal"
+                    HorizontalAlignment="Center" Margin="10">
+            <Button Content="Send" Command="{Binding SendCommand}" Classes="flat-button"
+                    Margin="0,0,10,0" Padding="10,5" />
+            <Button Content="Cancel" Command="{Binding CancelCommand}" Classes="flat-button"
+                    Padding="10,5" />
+        </StackPanel>
+    </StackPanel>
+</Window>
