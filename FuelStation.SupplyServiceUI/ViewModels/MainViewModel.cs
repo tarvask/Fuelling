@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Fuel;
+using FuelStation.SupplyServiceUI.Infrastructure;
 using FuelStation.SupplyServiceUI.Models;
 using Grpc.Net.Client;
 
@@ -16,9 +17,9 @@ public partial class MainViewModel : ViewModelBase
 
     private readonly FuelReservation.FuelReservationClient _client;
 
-    public MainViewModel()
+    public MainViewModel(AppConfigProvider appConfigProvider)
     {
-        var channel = GrpcChannel.ForAddress("http://localhost:5001");
+        var channel = GrpcChannel.ForAddress(appConfigProvider.GrpcAddress);
         _client = new FuelReservation.FuelReservationClient(channel);
         _ = LoadStationsAsync();
     }

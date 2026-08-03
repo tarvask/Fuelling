@@ -6,10 +6,9 @@ namespace FuelStation.SupplyServiceUI.Views;
 
 public partial class TankerSelectionDialog : Window
 {
-    public TankerSelectionDialog()
+    public TankerSelectionDialog(TankerSelectionViewModel viewModel)
     {
         AvaloniaXamlLoader.Load(this);
-        var viewModel = new TankerSelectionViewModel();
         DataContext = viewModel;
         viewModel.CloseAction = result => Close(result);
     }

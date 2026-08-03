@@ -3,8 +3,8 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using FuelStation.SupplyServiceUI.Infrastructure;
 using FuelStation.SupplyServiceUI.Models;
-using FuelStation.SupplyServiceUI.Services;
 
 namespace FuelStation.SupplyServiceUI.ViewModels;
 
@@ -20,7 +20,7 @@ public partial class TankerSelectionViewModel : ViewModelBase
 
     public Action<bool>? CloseAction { get; set; }
 
-    private readonly TankerConfigurationService _tankerConfigurationService = new();
+    private readonly AppConfigProvider _appConfigProvider;
     
     [RelayCommand]
     private void Send()
@@ -51,9 +51,10 @@ public partial class TankerSelectionViewModel : ViewModelBase
         CloseAction?.Invoke(false);
     }
     
-    public TankerSelectionViewModel()
+    public TankerSelectionViewModel(AppConfigProvider appConfigProvider)
     {
-        var tankers = _tankerConfigurationService.LoadTankers();
+        _appConfigProvider = appConfigProvider;
+        var tankers = _appConfigProvider.Tankers;
 
         foreach (var tanker in tankers)
         {
