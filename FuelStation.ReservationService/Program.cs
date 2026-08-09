@@ -67,9 +67,6 @@ using (var adminClient = new AdminClientBuilder(adminConfig).Build())
     {
         KafkaTopics.FuellingStarted,
         KafkaTopics.FuellingCompleted,
-        KafkaTopics.FuelAddedFast,
-        KafkaTopics.DeliveryStarted,
-        KafkaTopics.DeliveryCompleted,
         KafkaTopics.DeliveryEvents
     };
     var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(10));

@@ -14,11 +14,7 @@ enum FuelType {
 service FuelReservation {
   rpc StartFuelling (StartFuellingRequest) returns (StartFuellingResponse);
   rpc CompleteFuelling  (CompleteFuellingRequest)  returns (CompleteFuellingResponse);
-  rpc AddFuelFast      (AddFuelFastRequest) returns (AddFuelFastResponse);
-
   rpc StartDelivery   (StartDeliveryRequest)   returns (StartDeliveryResponse);
-  rpc CompleteDelivery (CompleteDeliveryRequest) returns (CompleteDeliveryResponse);
-  
   rpc GetStations (GetStationsRequest) returns (GetStationsResponse);
 }
 
@@ -48,19 +44,6 @@ message CompleteFuellingResponse {
   string error   = 2;
 }
 
-message AddFuelFastRequest {
-  string fuel_type = 1;
-  double litres    = 2;
-  string station_id = 3;
-}
-
-message AddFuelFastResponse {
-  bool   success    = 1;
-  string tank_id    = 2;
-  double new_volume = 3;
-  string error      = 4;
-}
-
 message StartDeliveryRequest {
   repeated Compartment compartments = 1;
   string station_id = 2;
@@ -70,16 +53,6 @@ message StartDeliveryResponse {
   bool success = 1;
   string session_id = 2;
   string error = 3;
-}
-
-message CompleteDeliveryRequest {
-  string session_id = 1;
-  string station_id = 2;
-}
-
-message CompleteDeliveryResponse {
-  bool success = 1;
-  string error = 2;
 }
 
 message Compartment {

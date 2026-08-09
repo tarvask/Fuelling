@@ -42,22 +42,6 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
         return new CompleteFuellingResponse { Success = result.Success, Error = result.Error ?? "" };
     }
 
-    public override async Task<AddFuelFastResponse> AddFuelFast(AddFuelFastRequest request, ServerCallContext context)
-    {
-        var result = await _reservationManager.AddFuelFastAsync(request.StationId, Enum.Parse<FuelType>(request.FuelType), request.Litres);
-
-        if (result.Success)
-            _ = _kafka.SendFuelAddedFastEvent(request.StationId, result.TankId!, request.FuelType, request.Litres, result.NewVolume);
-
-        return new AddFuelFastResponse
-        {
-            Success = result.Success,
-            TankId = result.TankId ?? string.Empty,
-            NewVolume = result.NewVolume,
-            Error = result.Error ?? string.Empty
-        };
-    }
-
     public override async Task<StartDeliveryResponse> StartDelivery(StartDeliveryRequest request, ServerCallContext context)
     {
         var result = await _deliveryOrchestrator.StartDeliveryProcessAsync(request.StationId, request.Compartments.ToList());
@@ -66,20 +50,6 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
         {
             Success = result.Success,
             SessionId = result.SessionId,
-            Error = result.Error ?? string.Empty
-        };
-    }
-
-    public override async Task<CompleteDeliveryResponse> CompleteDelivery(CompleteDeliveryRequest request, ServerCallContext context)
-    {
-        var result = await _reservationManager.CompleteDeliveryAsync(request.StationId, request.SessionId);
-
-        if (result.Success)
-            _ = _kafka.SendDeliveryCompletedEvent(request.StationId, request.SessionId);
-
-        return new CompleteDeliveryResponse
-        {
-            Success = result.Success,
             Error = result.Error ?? string.Empty
         };
     }
