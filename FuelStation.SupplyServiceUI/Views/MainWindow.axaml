@@ -3,6 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:FuelStation.SupplyServiceUI.ViewModels"
+        xmlns:converters="using:FuelStation.SupplyServiceUI.Converters"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="FuelStation.SupplyServiceUI.Views.MainWindow"
         x:DataType="vm:MainViewModel"
@@ -15,6 +16,10 @@
              to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
         <vm:MainViewModel />
     </Design.DataContext>
+    
+    <Window.Resources>
+        <converters:DeliveryStatusToColorConverter x:Key="StatusColorConverter"/>
+    </Window.Resources>
     
     <DockPanel Background="White">
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10">
@@ -36,7 +41,7 @@
                                         Classes="flat-button"
                                         Margin="0,10,0,0" Padding="10,5" HorizontalAlignment="Left"/>
                                 <TextBlock Grid.Column="1" Grid.RowSpan="3" 
-                                           Foreground="Black"
+                                           Foreground="{Binding Status, Converter={StaticResource StatusColorConverter}}"
                                            Text="{Binding Status}" 
                                            VerticalAlignment="Center" Margin="10,0"
                                            FontSize="16" FontWeight="Bold"/>

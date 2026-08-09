@@ -3,12 +3,6 @@ using Fuel;
 
 namespace FuelStation.SupplyServiceUI.Models;
 
-public class AppConfig
-{
-    public string GrpcAddress { get; init; } = "";
-    public List<TankerConfig> Tankers { get; init; } = new();
-}
-
 public class TankerConfig
 {
     public string Name { get; init; } = string.Empty;

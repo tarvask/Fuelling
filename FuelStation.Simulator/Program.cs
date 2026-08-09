@@ -53,8 +53,8 @@ int GetTotalFuelingProcessDurationMs(double litres)
 
 int GetHumanFactorDurationMs()
 {
-    int virtualMinutes = rnd.Next(1, 5);                // 1–4 minutes of fueling
-    return virtualMinutes * 60 * 1000 / simulationConfig.SpeedFactor;    // convert to real milliseconds
+    int virtualMinutes = rnd.Next(simulationConfig.MinHumanFactorMinutes, simulationConfig.MaxHumanFactorMinutes + 1);
+    return virtualMinutes * 60 * 1000 / simulationConfig.SpeedFactor;
 }
 
 int GetFuelingDurationFromVolumeMs(double litres)

@@ -1,4 +1,4 @@
-namespace FuelStation.Shared;
+namespace FuelStation.Shared.Constants;
 
 public static class KafkaTopics
 {
@@ -7,4 +7,5 @@ public static class KafkaTopics
     public const string FuelAddedFast = "fuel-added-fast";
     public const string DeliveryStarted = "delivery-started";
     public const string DeliveryCompleted = "delivery-completed";
+    public const string DeliveryEvents = "delivery-events";
 }

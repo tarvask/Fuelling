@@ -2,7 +2,7 @@ using Confluent.Kafka;
 using System.Text.Json;
 using Fuel;
 using FuelStation.ReservationService.Infrastructure;
-using FuelStation.Shared;
+using FuelStation.Shared.Constants;
 
 namespace FuelStation.ReservationService.Services;
 
@@ -87,6 +87,19 @@ public class KafkaProducerService
             { KafkaMessageKeys.Timestamp, DateTime.UtcNow }
         };
         await _producer.ProduceAsync(KafkaTopics.DeliveryCompleted,
+            new Message<string, string> { Key = sessionId, Value = JsonSerializer.Serialize(message) });
+    }
+    
+    public async Task SendDeliveryEvent(string stationId, string sessionId, string deliveryStatus)
+    {
+        var message = new Dictionary<string,object> 
+        { 
+            { KafkaMessageKeys.StationId, stationId },
+            { KafkaMessageKeys.SessionId, sessionId },
+            { KafkaMessageKeys.DeliveryStatus, deliveryStatus },
+            { KafkaMessageKeys.Timestamp, DateTime.UtcNow }
+        };
+        await _producer.ProduceAsync(KafkaTopics.DeliveryEvents,
             new Message<string, string> { Key = sessionId, Value = JsonSerializer.Serialize(message) });
     }
 }

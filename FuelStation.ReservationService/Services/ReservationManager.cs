@@ -14,7 +14,6 @@ public class ReservationManager
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly RedisLockProvider _lockProvider;
     private readonly ConcurrentDictionary<string, RedisLockToken> _pumpLocks = new();
-    private RedisLockToken? _currentStationLock;
 
     public ReservationManager(IServiceScopeFactory scopeFactory, RedisLockProvider lockProvider)
     {
@@ -24,8 +23,8 @@ public class ReservationManager
 
     public async Task<StartFuellingResult> StartFuellingAsync(string stationId, string? pumpId, FuelType fuelType, double preauthorizedLitres)
     {
-        if (_currentStationLock != null)
-            return StartFuellingResult.Fail(string.Format(ErrorMessages.StationClosed, fuelType));
+        if (await _lockProvider.IsLockedAsync(RedisConstants.StationLockKey(stationId)))
+            return StartFuellingResult.Fail(string.Format(ErrorMessages.StationClosedForFuelling, fuelType));
 
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -34,7 +33,7 @@ public class ReservationManager
         if (pump == null || pumpLock == null)
             return StartFuellingResult.Fail(pumpLock == null
                 ? string.Format(ErrorMessages.PumpNotAutoSelected, fuelType)
-                : ErrorMessages.PumpIsBusy);
+                : string.Format(ErrorMessages.PumpIsBusy, pumpId));
         
         try
         {
@@ -55,7 +54,7 @@ public class ReservationManager
                 tankLock = await _lockProvider.TryAcquireLockAsync(
                     RedisConstants.TankLockKey(tank.Id), TimeSpan.FromSeconds(RedisConstants.TankLockExpireTime));
                 if (tankLock == null)
-                    return StartFuellingResult.Fail(ErrorMessages.TankIsBusy);
+                    return StartFuellingResult.Fail(string.Format(ErrorMessages.TankIsBusy, tank.Id));
 
                 // double check
                 if (tank.CurrentVolume <= 0)
@@ -134,7 +133,7 @@ public class ReservationManager
             if (tankLock == null)
             {
                 await ReleaseAndCleanupAsync(pumpLock, session, db, sessionId);
-                return CompleteFuellingResult.Fail(ErrorMessages.TankIsBusy);
+                return CompleteFuellingResult.Fail(string.Format(ErrorMessages.TankIsBusy, tank.Id));
             }
 
             decimal actual = Math.Min((decimal)actualLitres, session.ReservedVolume);
@@ -178,7 +177,7 @@ public class ReservationManager
                 RedisConstants.TankLockKey(tank.Id), TimeSpan.FromSeconds(RedisConstants.TankLockExpireTime));
             if (tankLock == null)
             {
-                return AddFuelResult.Fail(ErrorMessages.TankIsBusy);
+                return AddFuelResult.Fail(string.Format(ErrorMessages.TankIsBusy, tank.Id));
             }
 
             // double check
@@ -202,7 +201,7 @@ public class ReservationManager
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         
         RedisLockToken? stationLock = await _lockProvider.TryAcquireLockAsync(
-            RedisConstants.StationDeliveryLockKey, TimeSpan.FromSeconds(RedisConstants.StationLockExpireTime));
+            RedisConstants.StationLockKey(stationId), TimeSpan.FromSeconds(RedisConstants.StationLockExpireTime));
         if (stationLock == null)
         {
             return StartDeliveryResult.Fail(ErrorMessages.DeliveryInProgress);
@@ -223,7 +222,6 @@ public class ReservationManager
             };
             db.DeliverySessions.Add(session);
             await db.SaveChangesAsync();
-            _currentStationLock = stationLock;
             return StartDeliveryResult.Ok(session.Id);
         }
         catch
@@ -244,7 +242,7 @@ public class ReservationManager
         if (session == null)
             return CompleteDeliveryResult.Fail(ErrorMessages.DeliverySessionNotFound);
 
-        if (_currentStationLock == null)
+        if (await _lockProvider.IsLockedAsync(RedisConstants.StationLockKey(stationId)))
         {
             db.DeliverySessions.Remove(session);
             await db.SaveChangesAsync();
@@ -295,10 +293,10 @@ public class ReservationManager
         }
         finally
         {
-            if (_currentStationLock != null)
+            var lockKey = RedisConstants.StationLockKey(stationId);
+            if (await _lockProvider.IsLockedAsync(lockKey))
             {
-                await _lockProvider.ReleaseLockAsync(_currentStationLock);
-                _currentStationLock = null;
+                // await _lockProvider.ReleaseLockAsync(lockKey);
             }
         }
     }

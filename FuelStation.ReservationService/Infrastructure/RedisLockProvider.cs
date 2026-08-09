@@ -34,6 +34,11 @@ public class RedisLockProvider
     {
         await _db.StringSetAsync(RedisConstants.TankVolumeCacheKey(tankId), volume.ToString(CultureInfo.InvariantCulture));
     }
+    
+    public async Task<bool> IsLockedAsync(string key)
+    {
+        return await _db.KeyExistsAsync(key);
+    }
 }
 
 public record RedisLockToken(string Key, string Token);

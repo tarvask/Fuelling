@@ -1,8 +1,11 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using FuelStation.SupplyServiceUI.Infrastructure;
+using FuelStation.SupplyServiceUI.Services;
 using FuelStation.SupplyServiceUI.ViewModels;
 using FuelStation.SupplyServiceUI.Views;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,6 +25,9 @@ public partial class App : Application
         {
             var serviceProvider = ConfigureServices();
             desktop.MainWindow = serviceProvider.GetRequiredService<MainWindow>();
+            
+            var consumer = serviceProvider.GetRequiredService<DeliveryEventConsumerService>();
+            _ = Task.Run(() => consumer.StartAsync(CancellationToken.None));
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -32,6 +38,8 @@ public partial class App : Application
         var services = new ServiceCollection();
 
         services.AddSingleton<AppConfigProvider>();
+        services.AddSingleton<DeliveryEventConsumerService>();
+        services.AddSingleton<DeliveryEventBus>();
         
         services.AddSingleton<MainViewModel>();
         services.AddTransient<MainWindow>();

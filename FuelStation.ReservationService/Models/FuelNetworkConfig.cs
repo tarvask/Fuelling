@@ -3,6 +3,7 @@ namespace FuelStation.ReservationService.Models;
 public class FuelNetworkConfig
 {
     public List<StationConfig> Stations { get; init; } = new();
+    public DeliveryConfig Delivery { get; init; } = new();
 }
 
 public class StationConfig
@@ -32,4 +33,16 @@ public class NozzleConfig
 {
     public string FuelType { get; init; } = "";
     public string TankId { get; init; } = "";
+}
+
+public class DeliveryConfig
+{
+    public int SpeedFactor { get; init; }
+    public int MinDeliveryDurationMinutes { get; init; }
+    public int MaxDeliveryDurationMinutes { get; init; }
+    public int MinUnloadDurationMinutes { get; init; }
+    public int MaxUnloadDurationMinutes { get; init; }
+
+    public int MaxTankFillRetriesCount { get; init; }
+    public int TankFillRetryDelayMs { get; init; }
 }

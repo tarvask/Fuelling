@@ -9,6 +9,7 @@ public class AppConfigProvider
 {
     public List<TankerConfig> Tankers { get; }
     public string GrpcAddress { get; }
+    public string KafkaBootstrapServers { get; }
 
     public AppConfigProvider()
     {
@@ -20,5 +21,6 @@ public class AppConfigProvider
 
         GrpcAddress = configuration.GetValue<string>("GrpcAddress") ?? "http://localhost:5001";
         Tankers = configuration.GetSection("Tankers").Get<List<TankerConfig>>() ?? new List<TankerConfig>();
+        KafkaBootstrapServers = configuration.GetValue<string>("Kafka:BootstrapServers") ?? "http://localhost:5001";
     }
 }

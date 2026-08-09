@@ -1,11 +1,13 @@
-using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Fuel;
+using FuelStation.Shared.Models;
+using FuelStation.SupplyServiceUI.Constants;
 using FuelStation.SupplyServiceUI.Infrastructure;
 using FuelStation.SupplyServiceUI.Models;
+using FuelStation.SupplyServiceUI.Services;
 using Grpc.Net.Client;
 
 namespace FuelStation.SupplyServiceUI.ViewModels;
@@ -17,13 +19,15 @@ public partial class MainViewModel : ViewModelBase
 
     private readonly FuelReservation.FuelReservationClient _client;
 
-    public MainViewModel(AppConfigProvider appConfigProvider)
+    public MainViewModel(AppConfigProvider appConfigProvider, DeliveryEventBus eventBus)
     {
         var channel = GrpcChannel.ForAddress(appConfigProvider.GrpcAddress);
         _client = new FuelReservation.FuelReservationClient(channel);
         _ = LoadStationsAsync();
+        
+        eventBus.DeliveryEventReceived += OnEventBusOnDeliveryEventReceived;
     }
-    
+
     public async Task LoadStationsAsync()
     {
         var response = await _client.GetStationsAsync(new GetStationsRequest());
@@ -35,14 +39,14 @@ public partial class MainViewModel : ViewModelBase
                 Id = station.Id,
                 Name = station.Name,
                 Address = station.Address,
-                Status = "No active delivery"
+                Status = DeliveryStatuses.NoActive
             });
         }
     }
     
     public async Task StartDeliveryAsync(StationViewModel station, TankerConfig tanker)
     {
-        station.Status = "Waiting for tanker";
+        station.Status = DeliveryStatuses.Requested;
         
         var startReply = await _client.StartDeliveryAsync(new StartDeliveryRequest
         {
@@ -57,11 +61,25 @@ public partial class MainViewModel : ViewModelBase
         if (!startReply.Success)
         {
             station.Status = $"Error: {startReply.Error}";
-            return;
         }
-
-        station.Status = "Unloading fuel...";
-        await Task.Delay(TimeSpan.FromSeconds(5));
-        station.Status = "Delivered";
+    }
+    
+    private void OnEventBusOnDeliveryEventReceived(DeliveryEventMessage message)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            var station = Stations.FirstOrDefault(s => s.Id == message.StationId);
+            
+            if (station == null) return;
+            
+            station.Status = message.DeliveryStatus switch
+            {
+                DeliveryStatusType.Scheduled => DeliveryStatuses.Scheduled,
+                DeliveryStatusType.Arrived => DeliveryStatuses.Arrived,
+                DeliveryStatusType.Completed => DeliveryStatuses.Completed,
+                DeliveryStatusType.Failed => DeliveryStatuses.Failed,
+                _ => DeliveryStatuses.NoActive
+            };
+        });
     }
 }

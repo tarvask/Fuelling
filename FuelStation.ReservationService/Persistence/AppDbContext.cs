@@ -105,6 +105,11 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(t => t.StationId)
                 .OnDelete(DeleteBehavior.Restrict);
+            
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(20)
+                .IsRequired();
         });
         
         modelBuilder.Entity<DeliveryCompartmentEntity>(entity =>

@@ -4,7 +4,7 @@ using FuelStation.ReservationService.Infrastructure;
 using FuelStation.ReservationService.Services;
 using FuelStation.ReservationService.Models;
 using FuelStation.ReservationService.Persistence;
-using FuelStation.Shared;
+using FuelStation.Shared.Constants;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -13,10 +13,13 @@ using StackExchange.Redis;
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.json", optional: false);
 builder.Services.Configure<FuelNetworkConfig>(builder.Configuration.GetSection("FuelNetwork"));
+builder.Services.Configure<DeliveryConfig>(builder.Configuration.GetSection("FuelNetwork:Delivery"));
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<StationConfig>>().Value);
 builder.Services.AddSingleton<ReservationManager>();
 builder.Services.AddSingleton<KafkaProducerService>();
 builder.Services.AddHostedService<KafkaConsumerService>();
+builder.Services.AddSingleton<DeliveryOrchestrator>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<DeliveryOrchestrator>());
 builder.Services.AddSingleton<DbInitializerService>();
 builder.Services.AddGrpc();
 builder.Services.AddSingleton<KafkaConfigurationProvider>();
@@ -66,7 +69,8 @@ using (var adminClient = new AdminClientBuilder(adminConfig).Build())
         KafkaTopics.FuellingCompleted,
         KafkaTopics.FuelAddedFast,
         KafkaTopics.DeliveryStarted,
-        KafkaTopics.DeliveryCompleted
+        KafkaTopics.DeliveryCompleted,
+        KafkaTopics.DeliveryEvents
     };
     var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(10));
     var existing = metadata.Topics.Select(t => t.Topic).ToHashSet();

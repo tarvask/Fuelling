@@ -5,18 +5,20 @@ namespace FuelStation.ReservationService.Services;
 
 public class FuelReservationService : FuelReservation.FuelReservationBase
 {
-    private readonly ReservationManager _manager;
+    private readonly ReservationManager _reservationManager;
+    private readonly DeliveryOrchestrator _deliveryOrchestrator;
     private readonly KafkaProducerService _kafka;
 
-    public FuelReservationService(ReservationManager manager, KafkaProducerService kafka)
+    public FuelReservationService(ReservationManager reservationManager, DeliveryOrchestrator deliveryOrchestrator, KafkaProducerService kafka)
     {
-        _manager = manager;
+        _reservationManager = reservationManager;
+        _deliveryOrchestrator = deliveryOrchestrator;
         _kafka = kafka;
     }
 
     public override async Task<StartFuellingResponse> StartFuelling(StartFuellingRequest request, ServerCallContext context)
     {
-        var result = await _manager.StartFuellingAsync(request.StationId, request.PumpId, request.FuelType, request.PreauthorizedLitres);
+        var result = await _reservationManager.StartFuellingAsync(request.StationId, request.PumpId, request.FuelType, request.PreauthorizedLitres);
 
         if (result.Success)
             _ = _kafka.SendFuellingStartedEvent(request.StationId, result.SessionId!, request.PumpId, request.FuelType.ToString(), result.ReservedLitres);
@@ -32,7 +34,7 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
 
     public override async Task<CompleteFuellingResponse> CompleteFuelling(CompleteFuellingRequest request, ServerCallContext context)
     {
-        var result = await _manager.CompleteFuellingAsync(request.StationId, request.SessionId, request.ActualLitres);
+        var result = await _reservationManager.CompleteFuellingAsync(request.StationId, request.SessionId, request.ActualLitres);
 
         if (result.Success)
             _ = _kafka.SendFuellingCompletedEvent(request.StationId, request.SessionId, request.FuelType.ToString(), request.ActualLitres);
@@ -42,7 +44,7 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
 
     public override async Task<AddFuelFastResponse> AddFuelFast(AddFuelFastRequest request, ServerCallContext context)
     {
-        var result = await _manager.AddFuelFastAsync(request.StationId, Enum.Parse<FuelType>(request.FuelType), request.Litres);
+        var result = await _reservationManager.AddFuelFastAsync(request.StationId, Enum.Parse<FuelType>(request.FuelType), request.Litres);
 
         if (result.Success)
             _ = _kafka.SendFuelAddedFastEvent(request.StationId, result.TankId!, request.FuelType, request.Litres, result.NewVolume);
@@ -58,11 +60,7 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
 
     public override async Task<StartDeliveryResponse> StartDelivery(StartDeliveryRequest request, ServerCallContext context)
     {
-        var compartments = request.Compartments.ToList();
-        var result = await _manager.StartDeliveryAsync(request.StationId, compartments);
-
-        if (result.Success)
-            _ = _kafka.SendDeliveryStartedEvent(request.StationId, result.SessionId!, compartments);
+        var result = await _deliveryOrchestrator.StartDeliveryProcessAsync(request.StationId, request.Compartments.ToList());
 
         return new StartDeliveryResponse
         {
@@ -74,7 +72,7 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
 
     public override async Task<CompleteDeliveryResponse> CompleteDelivery(CompleteDeliveryRequest request, ServerCallContext context)
     {
-        var result = await _manager.CompleteDeliveryAsync(request.StationId, request.SessionId);
+        var result = await _reservationManager.CompleteDeliveryAsync(request.StationId, request.SessionId);
 
         if (result.Success)
             _ = _kafka.SendDeliveryCompletedEvent(request.StationId, request.SessionId);
@@ -88,7 +86,7 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
 
     public override async Task<GetStationsResponse> GetStations(GetStationsRequest request, ServerCallContext context)
     {
-        var stations = await _manager.GetStationsAsync();
+        var stations = await _reservationManager.GetStationsAsync();
         var response = new GetStationsResponse();
         response.Stations.AddRange(stations);
         return response;
