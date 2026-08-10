@@ -11,9 +11,9 @@ using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Configuration.AddJsonFile("appsettings.json", optional: false);
+builder.Configuration.AddJsonFile("appsettings.json", optional: false).AddEnvironmentVariables();
 builder.Services.Configure<FuelNetworkConfig>(builder.Configuration.GetSection("FuelNetwork"));
-builder.Services.Configure<DeliveryConfig>(builder.Configuration.GetSection("FuelNetwork:Delivery"));
+builder.Services.Configure<SimulationConfig>(builder.Configuration.GetSection("Simulation"));
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<StationConfig>>().Value);
 builder.Services.AddSingleton<ReservationManager>();
 builder.Services.AddSingleton<KafkaProducerService>();

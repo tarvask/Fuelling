@@ -3,7 +3,6 @@ using Confluent.Kafka;
 using System.Text.Json;
 using FuelStation.PaymentService.Infrastructure;
 using FuelStation.PaymentService.Models;
-using FuelStation.Shared;
 using FuelStation.Shared.Constants;
 
 var kafkaConfigProvider = new KafkaConfigurationProvider();

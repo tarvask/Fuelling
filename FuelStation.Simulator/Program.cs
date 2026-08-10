@@ -19,8 +19,8 @@ if (simulationConfig == null)
     return;
 }
 
-var stationIdProvider = new StationIdProvider(configuration);
-var stationId = stationIdProvider.StationId;
+var simulationConfigProvider = new SimulationConfigProvider(configuration);
+var stationId = simulationConfigProvider.StationId;
 
 var rnd = new Random();
 
@@ -54,20 +54,20 @@ int GetTotalFuelingProcessDurationMs(double litres)
 int GetHumanFactorDurationMs()
 {
     int virtualMinutes = rnd.Next(simulationConfig.MinHumanFactorMinutes, simulationConfig.MaxHumanFactorMinutes + 1);
-    return virtualMinutes * 60 * 1000 / simulationConfig.SpeedFactor;
+    return virtualMinutes * 60 * 1000 / simulationConfigProvider.SpeedFactor;
 }
 
 int GetFuelingDurationFromVolumeMs(double litres)
 {
     double pumpSpeed = simulationConfig.PumpSpeedLitresPerMinute;
     int virtualMinutes = (int)Math.Ceiling(litres / pumpSpeed);
-    return virtualMinutes * 60 * 1000 / simulationConfig.SpeedFactor;
+    return virtualMinutes * 60 * 1000 / simulationConfigProvider.SpeedFactor;
 }
 
 int GetInterCarIntervalMs()
 {
     int virtualMinutes = rnd.Next(simulationConfig.MinIntervalVirtualMinutes, simulationConfig.MaxIntervalVirtualMinutes + 1);
-    return virtualMinutes * 60 * 1000 / simulationConfig.SpeedFactor;
+    return virtualMinutes * 60 * 1000 / simulationConfigProvider.SpeedFactor;
 }
 
 // ----- Main simulation loop -----

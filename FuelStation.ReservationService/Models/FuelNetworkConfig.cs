@@ -3,7 +3,7 @@ namespace FuelStation.ReservationService.Models;
 public class FuelNetworkConfig
 {
     public List<StationConfig> Stations { get; init; } = new();
-    public DeliveryConfig Delivery { get; init; } = new();
+    public SimulationConfig Simulation { get; init; } = new();
 }
 
 public class StationConfig
@@ -35,7 +35,7 @@ public class NozzleConfig
     public string TankId { get; init; } = "";
 }
 
-public class DeliveryConfig
+public class SimulationConfig
 {
     public int SpeedFactor { get; init; }
     public int MinDeliveryDurationMinutes { get; init; }

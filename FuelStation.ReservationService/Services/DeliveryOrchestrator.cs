@@ -15,19 +15,19 @@ public class DeliveryOrchestrator : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly RedisLockProvider _lockProvider;
     private readonly KafkaProducerService _kafka;
-    private readonly DeliveryConfig _deliveryConfig;
+    private readonly SimulationConfig _simulationConfig;
     private readonly ILogger<DeliveryOrchestrator> _logger;
 
     private readonly ConcurrentDictionary<string, Task> _activeDeliveries = new();
 
     public DeliveryOrchestrator(IServiceScopeFactory scopeFactory,
         RedisLockProvider lockProvider,
-        KafkaProducerService kafka, IOptions<DeliveryConfig> deliveryOptions, ILogger<DeliveryOrchestrator> logger)
+        KafkaProducerService kafka, IOptions<SimulationConfig> deliveryOptions, ILogger<DeliveryOrchestrator> logger)
     {
         _scopeFactory = scopeFactory;
         _lockProvider = lockProvider;
         _kafka = kafka;
-        _deliveryConfig = deliveryOptions.Value;
+        _simulationConfig = deliveryOptions.Value;
         _logger = logger;
     }
 
@@ -141,7 +141,7 @@ public class DeliveryOrchestrator : BackgroundService
                 RedisLockToken? tankLock = null;
                 bool acquired = false;
 
-                for (int retry = 0; retry < _deliveryConfig.MaxTankFillRetriesCount; retry++)
+                for (int retry = 0; retry < _simulationConfig.MaxTankFillRetriesCount; retry++)
                 {
                     tankLock = await _lockProvider.TryAcquireLockAsync(
                         RedisConstants.TankLockKey(tank.Id), TimeSpan.FromSeconds(RedisConstants.TankLockExpireTime));
@@ -150,8 +150,8 @@ public class DeliveryOrchestrator : BackgroundService
                         acquired = true;
                         break;
                     }
-                    if (retry < _deliveryConfig.MaxTankFillRetriesCount - 1)
-                        await Task.Delay(_deliveryConfig.TankFillRetryDelayMs);
+                    if (retry < _simulationConfig.MaxTankFillRetriesCount - 1)
+                        await Task.Delay(_simulationConfig.TankFillRetryDelayMs);
                 }
 
                 if (!acquired)
@@ -195,13 +195,13 @@ public class DeliveryOrchestrator : BackgroundService
     
     private int GetDeliveryTime()
     {
-        int minutes = Random.Shared.Next(_deliveryConfig.MinDeliveryDurationMinutes, _deliveryConfig.MaxDeliveryDurationMinutes);
-        return minutes * 60 * 1000 / _deliveryConfig.SpeedFactor;
+        int minutes = Random.Shared.Next(_simulationConfig.MinDeliveryDurationMinutes, _simulationConfig.MaxDeliveryDurationMinutes);
+        return minutes * 60 * 1000 / _simulationConfig.SpeedFactor;
     }
 
     private int GetUnloadTime()
     {
-        int minutes = Random.Shared.Next(_deliveryConfig.MinUnloadDurationMinutes, _deliveryConfig.MaxUnloadDurationMinutes);
-        return minutes * 60 * 1000 / _deliveryConfig.SpeedFactor;
+        int minutes = Random.Shared.Next(_simulationConfig.MinUnloadDurationMinutes, _simulationConfig.MaxUnloadDurationMinutes);
+        return minutes * 60 * 1000 / _simulationConfig.SpeedFactor;
     }
 }

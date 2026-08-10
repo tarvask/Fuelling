@@ -1,3 +1,7 @@
+x-common-variables: &common-vars
+  Simulation__SpeedFactor: 60
+  Grpc__GrpcAddress: "http://reservation-service:5001"
+
 services:
   kafka:
     image: confluentinc/cp-kafka:latest
@@ -63,10 +67,11 @@ services:
       - "5001:5001"   # gRPC
       #- "5000:5000"   # Healthcheck, no forwarding
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__Default=Host=postgres;Port=5432;Database=fuelstation;Username=fuelapp;Password=ai100
-      - Redis__ConnectionString=redis:6379
-      - Kafka__BootstrapServers=kafka:9094
+      <<: *common-vars
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=fuelstation;Username=fuelapp;Password=ai100"
+      Redis__ConnectionString: "redis:6379"
+      Kafka__BootstrapServers: "kafka:9094"
     depends_on:
       postgres:
         condition: service_healthy
@@ -91,7 +96,6 @@ services:
     container_name: fuelstation-payment
     environment:
       - Kafka__BootstrapServers=kafka:9094
-      - Grpc__GrpcAddress=http://reservation-service:5001
     depends_on:
       kafka:
         condition: service_started
@@ -105,8 +109,8 @@ services:
       dockerfile: ./FuelStation.Simulator/Dockerfile
     container_name: fuelstation-simulator-luk01
     environment:
-      - Grpc__GrpcAddress=http://reservation-service:5001
-      - Simulation__StationId=LUK-01
+      <<: *common-vars
+      Simulation__StationId: "LUK-01"
     depends_on:
       reservation-service:
         condition: service_healthy
@@ -118,8 +122,8 @@ services:
       dockerfile: ./FuelStation.Simulator/Dockerfile
     container_name: fuelstation-simulator-luk02
     environment:
-      - Grpc__GrpcAddress=http://reservation-service:5001
-      - Simulation__StationId=LUK-02
+      <<: *common-vars
+      Simulation__StationId: "LUK-02"
     depends_on:
       reservation-service:
         condition: service_healthy
@@ -131,8 +135,8 @@ services:
       dockerfile: ./FuelStation.Simulator/Dockerfile
     container_name: fuelstation-simulator-gaz01
     environment:
-      - Grpc__GrpcAddress=http://reservation-service:5001
-      - Simulation__StationId=GAZ-01
+      <<: *common-vars
+      Simulation__StationId: "GAZ-01"
     depends_on:
       reservation-service:
         condition: service_healthy
@@ -144,8 +148,8 @@ services:
       dockerfile: ./FuelStation.Simulator/Dockerfile
     container_name: fuelstation-simulator-ros01
     environment:
-      - Grpc__GrpcAddress=http://reservation-service:5001
-      - Simulation__StationId=ROS-01
+      <<: *common-vars
+      Simulation__StationId: "ROS-01"
     depends_on:
       reservation-service:
         condition: service_healthy
@@ -157,8 +161,8 @@ services:
       dockerfile: ./FuelStation.Simulator/Dockerfile
     container_name: fuelstation-simulator-luk03
     environment:
-      - Grpc__GrpcAddress=http://reservation-service:5001
-      - Simulation__StationId=LUK-03
+      <<: *common-vars
+      Simulation__StationId: "LUK-03"
     depends_on:
       reservation-service:
         condition: service_healthy
