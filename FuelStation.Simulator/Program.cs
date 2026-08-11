@@ -1,5 +1,7 @@
 ﻿using Grpc.Net.Client;
 using Fuel;
+using FuelStation.Shared.Constants;
+using FuelStation.Shared.Utilities;
 using FuelStation.Simulator.Infrastructure;
 using FuelStation.Simulator.Models;
 using Microsoft.Extensions.Configuration;
@@ -85,37 +87,7 @@ while (!cts.Token.IsCancellationRequested)
 
     try
     {
-        var startReply = await client.StartFuellingAsync(new StartFuellingRequest
-        {
-            StationId = fuelRequest.StationId,
-            PumpId = string.Empty,
-            FuelType = fuelRequest.FuelType,
-            PreauthorizedLitres = fuelRequest.Litres
-        });
-
-        if (!startReply.Success)
-        {
-            Console.WriteLine($"[{DateTime.Now:T}] Start failed: {startReply.Error}");
-        }
-        else
-        {
-            Console.WriteLine($"[{DateTime.Now:T}] Session {startReply.SessionId}: reserved {startReply.ReservedLitres}L {fuelRequest.FuelType}");
-
-            // Simulate fueling time
-            await Task.Delay(GetTotalFuelingProcessDurationMs(fuelRequest.Litres));
-
-            var stopReply = await client.CompleteFuellingAsync(new CompleteFuellingRequest
-            {
-                StationId = fuelRequest.StationId,
-                SessionId = startReply.SessionId,
-                FuelType = fuelRequest.FuelType,
-                ActualLitres = startReply.ReservedLitres
-            });
-
-            Console.WriteLine(stopReply.Success
-                ? $"[{DateTime.Now:T}] Session {startReply.SessionId} ended: actual {startReply.ReservedLitres}L, success={stopReply.Success}"
-                : $"[{DateTime.Now:T}] Session {startReply.SessionId} ended: actual {startReply.ReservedLitres}L, success={stopReply.Success}, error={stopReply.Error}");
-        }
+        await FuelSingleCar(client, fuelRequest);
     }
     catch (Exception ex)
     {
@@ -140,6 +112,52 @@ static FuelRequest CreateRandomFuelData(
 
     double litres = rnd.Next(minLitres, maxLitres + 1);
     return new FuelRequest(stationId, selectedFuel, litres);
+}
+
+async Task FuelSingleCar(FuelReservation.FuelReservationClient fuelReservationClient, FuelRequest fuelRequest)
+{
+    var idempotencyKey = Guid.NewGuid().ToString();
+    var startFuellingRequest = new StartFuellingRequest
+    {
+        StationId = fuelRequest.StationId,
+        PumpId = string.Empty,
+        FuelType = fuelRequest.FuelType,
+        PreauthorizedLitres = fuelRequest.Litres,
+        IdempotencyKey = idempotencyKey
+    };
+    StartFuellingResponse? startReply = await GrpcRetryHelper.RetryGrpcCallAsync<StartFuellingResponse>(() =>
+        fuelReservationClient.StartFuellingAsync(startFuellingRequest).ResponseAsync);
+
+    if (startReply == null || startReply.Success == false)
+    {
+        Console.WriteLine($"[{DateTime.Now:T}] Start failed: {startReply?.Error ?? "No server answer"}");
+        return;
+    }
+
+    Console.WriteLine($"[{DateTime.Now:T}] Session {startReply.SessionId}: reserved {startReply.ReservedLitres}L {fuelRequest.FuelType}");
+
+    // Simulate fueling time
+    await Task.Delay(GetTotalFuelingProcessDurationMs(fuelRequest.Litres));
+
+    var completeFuellingRequest = new CompleteFuellingRequest
+    {
+        StationId = fuelRequest.StationId,
+        SessionId = startReply.SessionId,
+        FuelType = fuelRequest.FuelType,
+        ActualLitres = startReply.ReservedLitres
+    };
+    CompleteFuellingResponse? completeReply = await GrpcRetryHelper.RetryGrpcCallAsync<CompleteFuellingResponse>(() =>
+        fuelReservationClient.CompleteFuellingAsync(completeFuellingRequest).ResponseAsync);
+
+    if (completeReply == null || completeReply.Success == false)
+    {
+        Console.WriteLine($"[{DateTime.Now:T}] Complete of session {startReply.SessionId} failed: {completeReply?.Error ?? "No server answer"}");
+        return;
+    }
+
+    Console.WriteLine(completeReply.Success
+        ? $"[{DateTime.Now:T}] Session {startReply.SessionId} ended: actual {startReply.ReservedLitres}L, success={completeReply.Success}"
+        : $"[{DateTime.Now:T}] Session {startReply.SessionId} ended: actual {startReply.ReservedLitres}L, success={completeReply.Success}, error={completeReply.Error}");
 }
 
 public record FuelRequest(string StationId, FuelType FuelType, double Litres);

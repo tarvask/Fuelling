@@ -23,6 +23,7 @@ message StartFuellingRequest {
   FuelType fuel_type          = 2;
   double preauthorized_litres = 3;
   string station_id           = 4;
+  string idempotency_key      = 5;
 }
 
 message StartFuellingResponse {
@@ -46,7 +47,8 @@ message CompleteFuellingResponse {
 
 message StartDeliveryRequest {
   repeated Compartment compartments = 1;
-  string station_id = 2;
+  string station_id                 = 2;
+  string idempotency_key            = 3;
 }
 
 message StartDeliveryResponse {

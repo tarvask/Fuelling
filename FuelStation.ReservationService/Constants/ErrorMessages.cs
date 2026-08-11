@@ -18,4 +18,8 @@ public static class ErrorMessages
 
     public const string DeliveryInProgress = "Delivery in progress";
     public const string DeliverySessionNotFound = "Delivery session not found";
+
+    public const string IdempotencyKeyNotProvidedForFuelling = "Idempotency key not provided for fuelling";
+    public const string IdempotencyKeyNotProvidedForDelivering = "Idempotency key not provided for delivering";
+    public const string IdempotencyConflict = "Idempotency conflict";
 }

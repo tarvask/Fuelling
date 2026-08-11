@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Grpc.Core.Api" Version="2.80.0" />
+  </ItemGroup>
+
 </Project>

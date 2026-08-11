@@ -8,4 +8,5 @@ public static class DeliveryStatuses
     public const string Completed = "Completed";
     public const string Failed = "Failed";
     public const string NoActive = "No active delivery";
+    public const string NoServerAnswer = "No server answer";
 }

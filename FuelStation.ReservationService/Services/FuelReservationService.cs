@@ -18,7 +18,7 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
 
     public override async Task<StartFuellingResponse> StartFuelling(StartFuellingRequest request, ServerCallContext context)
     {
-        var result = await _reservationManager.StartFuellingAsync(request.StationId, request.PumpId, request.FuelType, request.PreauthorizedLitres);
+        var result = await _reservationManager.StartFuellingAsync(request.StationId, request.PumpId, request.FuelType, request.PreauthorizedLitres, request.IdempotencyKey);
 
         if (result.Success)
             _ = _kafka.SendFuellingStartedEvent(request.StationId, result.SessionId!, request.PumpId, request.FuelType.ToString(), result.ReservedLitres);
@@ -44,7 +44,7 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
 
     public override async Task<StartDeliveryResponse> StartDelivery(StartDeliveryRequest request, ServerCallContext context)
     {
-        var result = await _deliveryOrchestrator.StartDeliveryProcessAsync(request.StationId, request.Compartments.ToList());
+        var result = await _deliveryOrchestrator.StartDeliveryProcessAsync(request.StationId, request.Compartments.ToList(), request.IdempotencyKey);
 
         return new StartDeliveryResponse
         {

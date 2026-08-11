@@ -14,6 +14,7 @@ public class DeliveryOrchestrator : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly RedisLockProvider _lockProvider;
+    private readonly RedisIdempotencyProvider _idempotencyProvider;
     private readonly KafkaProducerService _kafka;
     private readonly SimulationConfig _simulationConfig;
     private readonly ILogger<DeliveryOrchestrator> _logger;
@@ -22,17 +23,33 @@ public class DeliveryOrchestrator : BackgroundService
 
     public DeliveryOrchestrator(IServiceScopeFactory scopeFactory,
         RedisLockProvider lockProvider,
+        RedisIdempotencyProvider idempotencyProvider,
         KafkaProducerService kafka, IOptions<SimulationConfig> deliveryOptions, ILogger<DeliveryOrchestrator> logger)
     {
         _scopeFactory = scopeFactory;
         _lockProvider = lockProvider;
+        _idempotencyProvider = idempotencyProvider;
         _kafka = kafka;
         _simulationConfig = deliveryOptions.Value;
         _logger = logger;
     }
 
-    public async Task<StartDeliveryResult> StartDeliveryProcessAsync(string stationId, List<Compartment> compartments)
+    public async Task<StartDeliveryResult> StartDeliveryProcessAsync(string stationId, List<Compartment> compartments, string idempotencyKey)
     {
+        if (string.IsNullOrEmpty(idempotencyKey))
+            return StartDeliveryResult.Fail(ErrorMessages.IdempotencyKeyNotProvidedForDelivering);
+        
+        var cachedOperationResult = await _idempotencyProvider.GetIdempotencyResultAsync<StartDeliveryResult>(idempotencyKey);
+        if (cachedOperationResult != null)
+            return cachedOperationResult;
+
+        var keyAcquired = await _idempotencyProvider.TrySetIdempotencyKeyAsync(idempotencyKey);
+        if (keyAcquired == false)
+        {
+            cachedOperationResult = await _idempotencyProvider.WaitForIdempotentResultAsync<StartDeliveryResult>(idempotencyKey);
+            return cachedOperationResult ?? StartDeliveryResult.Fail(ErrorMessages.IdempotencyConflict);
+        }
+        
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         
@@ -53,7 +70,9 @@ public class DeliveryOrchestrator : BackgroundService
         var deliveryTask = Task.Run(() => ExecuteDeliveryProcess(session.Id, stationId, compartments));
         _activeDeliveries.TryAdd(session.Id, deliveryTask);
         _logger.LogInformation("Delivery {SessionId} for station {StationId} started in background", session.Id, stationId);
-        return StartDeliveryResult.Ok(session.Id);
+        var okResult = StartDeliveryResult.Ok(session.Id);
+        await _idempotencyProvider.SetIdempotencyResultAsync(idempotencyKey, okResult.ToString());
+        return okResult;
     }
 
     private async Task ExecuteDeliveryProcess(string sessionId, string stationId, List<Compartment> compartments)
@@ -79,7 +98,7 @@ public class DeliveryOrchestrator : BackgroundService
 
             // arrived
             stationLock = await _lockProvider.TryAcquireLockAsync(
-                RedisConstants.StationLockKey(stationId), TimeSpan.FromSeconds(RedisConstants.StationLockExpireTime));
+                LockConstants.StationLockKey(stationId), TimeSpan.FromSeconds(LockConstants.StationLockExpireTime));
             if (stationLock == null)
                 throw new InvalidOperationException( ErrorMessages.StationClosedForDelivering);
 
@@ -144,7 +163,7 @@ public class DeliveryOrchestrator : BackgroundService
                 for (int retry = 0; retry < _simulationConfig.MaxTankFillRetriesCount; retry++)
                 {
                     tankLock = await _lockProvider.TryAcquireLockAsync(
-                        RedisConstants.TankLockKey(tank.Id), TimeSpan.FromSeconds(RedisConstants.TankLockExpireTime));
+                        LockConstants.TankLockKey(tank.Id), TimeSpan.FromSeconds(LockConstants.TankLockExpireTime));
                     if (tankLock != null)
                     {
                         acquired = true;

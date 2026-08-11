@@ -1,6 +1,6 @@
-namespace FuelStation.ReservationService.Infrastructure;
+namespace FuelStation.ReservationService.Constants;
 
-public static class RedisConstants
+public static class LockConstants
 {
     public static string StationLockKey(string stationId) => $"lock:station:{stationId}";
     public static string PumpLockKey(string pumpId) => $"lock:pump:{pumpId}";

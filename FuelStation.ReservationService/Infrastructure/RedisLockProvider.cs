@@ -1,4 +1,5 @@
 using System.Globalization;
+using FuelStation.ReservationService.Constants;
 using StackExchange.Redis;
 
 namespace FuelStation.ReservationService.Infrastructure;
@@ -32,7 +33,7 @@ public class RedisLockProvider
     
     public async Task SetTankVolumeAsync(string tankId, decimal volume)
     {
-        await _db.StringSetAsync(RedisConstants.TankVolumeCacheKey(tankId), volume.ToString(CultureInfo.InvariantCulture));
+        await _db.StringSetAsync(LockConstants.TankVolumeCacheKey(tankId), volume.ToString(CultureInfo.InvariantCulture));
     }
     
     public async Task<bool> IsLockedAsync(string key)

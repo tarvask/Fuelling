@@ -40,6 +40,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
     return ConnectionMultiplexer.Connect(config);
 });
 builder.Services.AddSingleton<RedisLockProvider>();
+builder.Services.AddSingleton<RedisIdempotencyProvider>();
 
 builder.WebHost.ConfigureKestrel(options =>
 {

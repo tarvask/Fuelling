@@ -1,9 +1,11 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Fuel;
 using FuelStation.Shared.Models;
+using FuelStation.Shared.Utilities;
 using FuelStation.SupplyServiceUI.Constants;
 using FuelStation.SupplyServiceUI.Infrastructure;
 using FuelStation.SupplyServiceUI.Models;
@@ -47,20 +49,27 @@ public partial class MainViewModel : ViewModelBase
     public async Task StartDeliveryAsync(StationViewModel station, TankerConfig tanker)
     {
         station.Status = DeliveryStatuses.Requested;
-        
-        var startReply = await _client.StartDeliveryAsync(new StartDeliveryRequest
+
+        var idempotencyKey = Guid.NewGuid().ToString();
+        var request = new StartDeliveryRequest
         {
             StationId = station.Id,
-            Compartments = { tanker.Compartments.Select(c => new Compartment
+            Compartments =
             {
-                FuelType = c.FuelType,
-                Litres = c.Litres
-            }) }
-        });
+                tanker.Compartments.Select(c => new Compartment
+                {
+                    FuelType = c.FuelType,
+                    Litres = c.Litres
+                })
+            },
+            IdempotencyKey = idempotencyKey
+        };
+        StartDeliveryResponse? startReply = await GrpcRetryHelper.RetryGrpcCallAsync<StartDeliveryResponse>(() =>
+            _client.StartDeliveryAsync(request).ResponseAsync);
 
-        if (!startReply.Success)
+        if (startReply == null || startReply.Success == false)
         {
-            station.Status = $"Error: {startReply.Error}";
+            station.Status = $"Error: {startReply?.Error ?? DeliveryStatuses.NoServerAnswer}";
         }
     }
     

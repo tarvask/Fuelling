@@ -13,19 +13,36 @@ public class ReservationManager
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly RedisLockProvider _lockProvider;
+    private readonly RedisIdempotencyProvider _idempotencyProvider;
+    
     private readonly ConcurrentDictionary<string, RedisLockToken> _pumpLocks = new();
 
-    public ReservationManager(IServiceScopeFactory scopeFactory, RedisLockProvider lockProvider)
+    public ReservationManager(IServiceScopeFactory scopeFactory, RedisLockProvider lockProvider, RedisIdempotencyProvider idempotencyProvider)
     {
         _scopeFactory = scopeFactory;
         _lockProvider = lockProvider;
+        _idempotencyProvider = idempotencyProvider;
     }
 
-    public async Task<StartFuellingResult> StartFuellingAsync(string stationId, string? pumpId, FuelType fuelType, double preauthorizedLitres)
+    public async Task<StartFuellingResult> StartFuellingAsync(string stationId, string? pumpId, FuelType fuelType, double preauthorizedLitres, string idempotencyKey)
     {
-        if (await _lockProvider.IsLockedAsync(RedisConstants.StationLockKey(stationId)))
+        if (string.IsNullOrEmpty(idempotencyKey))
+            return StartFuellingResult.Fail(ErrorMessages.IdempotencyKeyNotProvidedForFuelling);
+        
+        var cachedOperationResult = await _idempotencyProvider.GetIdempotencyResultAsync<StartFuellingResult>(idempotencyKey);
+        if (cachedOperationResult != null)
+            return cachedOperationResult;
+        
+        var keyAcquired = await _idempotencyProvider.TrySetIdempotencyKeyAsync(idempotencyKey);
+        if (keyAcquired == false)
+        {
+            var eventualResult = await _idempotencyProvider.WaitForIdempotentResultAsync<StartFuellingResult>(idempotencyKey);
+            return eventualResult ?? StartFuellingResult.Fail(ErrorMessages.IdempotencyConflict);
+        }
+        
+        if (await _lockProvider.IsLockedAsync(LockConstants.StationLockKey(stationId)))
             return StartFuellingResult.Fail(string.Format(ErrorMessages.StationClosedForFuelling, fuelType));
-
+        
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         
@@ -52,7 +69,7 @@ public class ReservationManager
             try
             {
                 tankLock = await _lockProvider.TryAcquireLockAsync(
-                    RedisConstants.TankLockKey(tank.Id), TimeSpan.FromSeconds(RedisConstants.TankLockExpireTime));
+                    LockConstants.TankLockKey(tank.Id), TimeSpan.FromSeconds(LockConstants.TankLockExpireTime));
                 if (tankLock == null)
                     return StartFuellingResult.Fail(string.Format(ErrorMessages.TankIsBusy, tank.Id));
 
@@ -79,7 +96,10 @@ public class ReservationManager
                 await _lockProvider.SetTankVolumeAsync(tank.Id, tank.CurrentVolume);
 
                 _pumpLocks[session.Id] = pumpLock;
-                return StartFuellingResult.Ok(session.Id, (double)reserve);
+                
+                var okResult = StartFuellingResult.Ok(session.Id, (double)reserve);
+                await _idempotencyProvider.SetIdempotencyResultAsync(idempotencyKey, okResult.ToString());
+                return okResult;
             }
             finally
             {
@@ -108,20 +128,20 @@ public class ReservationManager
         var pump = await db.Pumps.FirstOrDefaultAsync(p => p.Id == session.PumpId && p.StationId == stationId);
         if (pump == null)
         {
-            await ReleaseAndCleanupAsync(pumpLock, session, db, sessionId);
+            await ReleasePumpAndCleanupAsync(pumpLock, session, db, sessionId);
             return CompleteFuellingResult.Fail(ErrorMessages.PumpNotFound);
         }
         
         var tank = await db.Tanks.FirstOrDefaultAsync(t => t.Id == session.TankId && t.StationId == stationId);
         if (tank == null)
         {
-            await ReleaseAndCleanupAsync(pumpLock, session, db, sessionId);
+            await ReleasePumpAndCleanupAsync(pumpLock, session, db, sessionId);
             return CompleteFuellingResult.Fail(ErrorMessages.TankNotFound);
         }
 
         if (session.Status != SessionStatus.Reserved)
         {
-            await ReleaseAndCleanupAsync(pumpLock, session, db, sessionId);
+            await ReleasePumpAndCleanupAsync(pumpLock, session, db, sessionId);
             return CompleteFuellingResult.Fail(ErrorMessages.SessionAlreadyCompleted);
         }
         
@@ -129,10 +149,10 @@ public class ReservationManager
         try
         {
             tankLock = await _lockProvider.TryAcquireLockAsync(
-                RedisConstants.TankLockKey(tank.Id), TimeSpan.FromSeconds(RedisConstants.TankLockExpireTime));
+                LockConstants.TankLockKey(tank.Id), TimeSpan.FromSeconds(LockConstants.TankLockExpireTime));
             if (tankLock == null)
             {
-                await ReleaseAndCleanupAsync(pumpLock, session, db, sessionId);
+                await ReleasePumpAndCleanupAsync(pumpLock, session, db, sessionId);
                 return CompleteFuellingResult.Fail(string.Format(ErrorMessages.TankIsBusy, tank.Id));
             }
 
@@ -152,7 +172,7 @@ public class ReservationManager
         finally
         {
             if (tankLock != null) await _lockProvider.ReleaseLockAsync(tankLock);
-            await ReleaseAndCleanupAsync(pumpLock, session, db, sessionId);
+            await ReleasePumpAndCleanupAsync(pumpLock, session, db, sessionId);
         }
     }
 
@@ -185,7 +205,7 @@ public class ReservationManager
             foreach (var candidate in candidates)
             {
                 pumpLock = await _lockProvider.TryAcquireLockAsync(
-                    RedisConstants.PumpLockKey(candidate.Id), TimeSpan.FromSeconds(RedisConstants.PumpLockExpireTime));
+                    LockConstants.PumpLockKey(candidate.Id), TimeSpan.FromSeconds(LockConstants.PumpLockExpireTime));
                 if (pumpLock != null)
                     return (candidate, pumpLock);
             }
@@ -199,11 +219,11 @@ public class ReservationManager
             return (null, null);
 
         pumpLock = await _lockProvider.TryAcquireLockAsync(
-            RedisConstants.PumpLockKey(pump.Id), TimeSpan.FromSeconds(RedisConstants.PumpLockExpireTime));
+            LockConstants.PumpLockKey(pump.Id), TimeSpan.FromSeconds(LockConstants.PumpLockExpireTime));
         return (pump, pumpLock);
     }
     
-    private async Task ReleaseAndCleanupAsync(RedisLockToken? pumpLock, FuellingSessionEntity session, AppDbContext db, string sessionId)
+    private async Task ReleasePumpAndCleanupAsync(RedisLockToken? pumpLock, FuellingSessionEntity session, AppDbContext db, string sessionId)
     {
         if (pumpLock != null)
             await _lockProvider.ReleaseLockAsync(pumpLock);
