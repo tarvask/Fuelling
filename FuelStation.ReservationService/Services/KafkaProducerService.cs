@@ -5,7 +5,14 @@ using FuelStation.Shared.Constants;
 
 namespace FuelStation.ReservationService.Services;
 
-public class KafkaProducerService
+public interface IKafkaProducerService
+{
+    Task SendFuellingStartedEvent(string stationId, string sessionId, string pumpId, string fuelType, double reservedLitres);
+    Task SendFuellingCompletedEvent(string stationId, string sessionId, string fuelType, double actualLitres);
+    Task SendDeliveryEvent(string stationId, string sessionId, string deliveryStatus);
+}
+
+public class KafkaProducerService : IKafkaProducerService
 {
     private readonly IProducer<string, string> _producer;
 

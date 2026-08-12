@@ -13,18 +13,18 @@ namespace FuelStation.ReservationService.Services;
 public class DeliveryOrchestrator : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly RedisLockProvider _lockProvider;
-    private readonly RedisIdempotencyProvider _idempotencyProvider;
-    private readonly KafkaProducerService _kafka;
+    private readonly IRedisLockProvider _lockProvider;
+    private readonly IRedisIdempotencyProvider _idempotencyProvider;
+    private readonly IKafkaProducerService _kafka;
     private readonly SimulationConfig _simulationConfig;
     private readonly ILogger<DeliveryOrchestrator> _logger;
 
     private readonly ConcurrentDictionary<string, Task> _activeDeliveries = new();
 
     public DeliveryOrchestrator(IServiceScopeFactory scopeFactory,
-        RedisLockProvider lockProvider,
-        RedisIdempotencyProvider idempotencyProvider,
-        KafkaProducerService kafka, IOptions<SimulationConfig> deliveryOptions, ILogger<DeliveryOrchestrator> logger)
+        IRedisLockProvider lockProvider,
+        IRedisIdempotencyProvider idempotencyProvider,
+        IKafkaProducerService kafka, IOptions<SimulationConfig> deliveryOptions, ILogger<DeliveryOrchestrator> logger)
     {
         _scopeFactory = scopeFactory;
         _lockProvider = lockProvider;

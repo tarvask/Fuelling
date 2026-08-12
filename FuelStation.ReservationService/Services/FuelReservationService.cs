@@ -7,9 +7,9 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
 {
     private readonly ReservationManager _reservationManager;
     private readonly DeliveryOrchestrator _deliveryOrchestrator;
-    private readonly KafkaProducerService _kafka;
+    private readonly IKafkaProducerService _kafka;
 
-    public FuelReservationService(ReservationManager reservationManager, DeliveryOrchestrator deliveryOrchestrator, KafkaProducerService kafka)
+    public FuelReservationService(ReservationManager reservationManager, DeliveryOrchestrator deliveryOrchestrator, IKafkaProducerService kafka)
     {
         _reservationManager = reservationManager;
         _deliveryOrchestrator = deliveryOrchestrator;

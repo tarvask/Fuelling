@@ -4,7 +4,15 @@ using StackExchange.Redis;
 
 namespace FuelStation.ReservationService.Infrastructure;
 
-public class RedisIdempotencyProvider
+public interface IRedisIdempotencyProvider
+{
+    Task<bool> TrySetIdempotencyKeyAsync(string key);
+    Task SetIdempotencyResultAsync(string key, string result);
+    Task<T?> GetIdempotencyResultAsync<T>(string key) where T : class;
+    Task<T?> WaitForIdempotentResultAsync<T>(string idempotencyKey) where T : class;
+}
+
+public class RedisIdempotencyProvider : IRedisIdempotencyProvider
 {
     private readonly IDatabase _db;
     private readonly TimeSpan _idempotencyTtl;

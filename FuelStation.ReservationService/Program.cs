@@ -16,7 +16,7 @@ builder.Services.Configure<FuelNetworkConfig>(builder.Configuration.GetSection("
 builder.Services.Configure<SimulationConfig>(builder.Configuration.GetSection("Simulation"));
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<StationConfig>>().Value);
 builder.Services.AddSingleton<ReservationManager>();
-builder.Services.AddSingleton<KafkaProducerService>();
+builder.Services.AddSingleton<IKafkaProducerService, KafkaProducerService>();
 builder.Services.AddHostedService<KafkaConsumerService>();
 builder.Services.AddSingleton<DeliveryOrchestrator>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DeliveryOrchestrator>());
@@ -39,8 +39,8 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
     config.AbortOnConnectFail = false;
     return ConnectionMultiplexer.Connect(config);
 });
-builder.Services.AddSingleton<RedisLockProvider>();
-builder.Services.AddSingleton<RedisIdempotencyProvider>();
+builder.Services.AddSingleton<IRedisLockProvider, RedisLockProvider>();
+builder.Services.AddSingleton<IRedisIdempotencyProvider, RedisIdempotencyProvider>();
 
 builder.WebHost.ConfigureKestrel(options =>
 {

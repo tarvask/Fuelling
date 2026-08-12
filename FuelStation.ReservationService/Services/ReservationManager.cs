@@ -12,12 +12,12 @@ namespace FuelStation.ReservationService.Services;
 public class ReservationManager
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly RedisLockProvider _lockProvider;
-    private readonly RedisIdempotencyProvider _idempotencyProvider;
+    private readonly IRedisLockProvider _lockProvider;
+    private readonly IRedisIdempotencyProvider _idempotencyProvider;
     
     private readonly ConcurrentDictionary<string, RedisLockToken> _pumpLocks = new();
 
-    public ReservationManager(IServiceScopeFactory scopeFactory, RedisLockProvider lockProvider, RedisIdempotencyProvider idempotencyProvider)
+    public ReservationManager(IServiceScopeFactory scopeFactory, IRedisLockProvider lockProvider, IRedisIdempotencyProvider idempotencyProvider)
     {
         _scopeFactory = scopeFactory;
         _lockProvider = lockProvider;

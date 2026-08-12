@@ -4,7 +4,15 @@ using StackExchange.Redis;
 
 namespace FuelStation.ReservationService.Infrastructure;
 
-public class RedisLockProvider
+public interface IRedisLockProvider
+{
+    Task<RedisLockToken?> TryAcquireLockAsync(string key, TimeSpan expiry);
+    Task ReleaseLockAsync(RedisLockToken lockToken);
+    Task SetTankVolumeAsync(string tankId, decimal volume);
+    Task<bool> IsLockedAsync(string key);
+}
+
+public class RedisLockProvider : IRedisLockProvider
 {
     private readonly IDatabase _db;
 
