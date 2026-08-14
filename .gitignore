@@ -59,3 +59,7 @@ nunit-*.xml
 
 # Memos
 [Mm]emo/
+
+# Test coverage reports
+**/TestResults/
+coveragereport/
