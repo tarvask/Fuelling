@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Fuel;
 using FuelStation.ReservationService.Constants;
 using FuelStation.ReservationService.Infrastructure;
@@ -26,85 +27,26 @@ public class ReservationManager
 
     public async Task<StartFuellingResult> StartFuellingAsync(string stationId, string? pumpId, FuelType fuelType, double preauthorizedLitres, string idempotencyKey)
     {
-        if (string.IsNullOrEmpty(idempotencyKey))
-            return StartFuellingResult.Fail(ErrorMessages.IdempotencyKeyNotProvidedForFuelling);
-        
-        var cachedOperationResult = await _idempotencyProvider.GetIdempotencyResultAsync<StartFuellingResult>(idempotencyKey);
-        if (cachedOperationResult != null)
-            return cachedOperationResult;
-        
-        var keyAcquired = await _idempotencyProvider.TrySetIdempotencyKeyAsync(idempotencyKey);
-        if (keyAcquired == false)
-        {
-            var eventualResult = await _idempotencyProvider.WaitForIdempotentResultAsync<StartFuellingResult>(idempotencyKey);
-            return eventualResult ?? StartFuellingResult.Fail(ErrorMessages.IdempotencyConflict);
-        }
+        var idempotencyResult = await CheckOrAcquireIdempotencyAsync(idempotencyKey);
+        if (idempotencyResult != null)
+            return idempotencyResult;
         
         if (await _lockProvider.IsLockedAsync(LockConstants.StationLockKey(stationId)))
-            return StartFuellingResult.Fail(string.Format(ErrorMessages.StationClosedForFuelling, fuelType));
+            return StartFuellingResult.Fail(string.Format(ErrorMessages.StationClosedFuellingRejected, stationId, fuelType));
         
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         
         var (pump, pumpLock) = await SelectAndLockPumpAsync(db, stationId, pumpId, fuelType);
         if (pump == null || pumpLock == null)
-            return StartFuellingResult.Fail(pumpLock == null
+            return StartFuellingResult.Fail(string.IsNullOrEmpty(pumpId)
                 ? string.Format(ErrorMessages.PumpNotAutoSelected, fuelType)
                 : string.Format(ErrorMessages.PumpIsBusy, pumpId));
         
         try
         {
-            var nozzle = pump.Nozzles.FirstOrDefault(n => n.FuelType == fuelType);
-            if (nozzle == null)
-                return StartFuellingResult.Fail(ErrorMessages.FuelTypeMismatch);
-
-            var tank = nozzle.Tank;
-            if (tank == null)
-                return StartFuellingResult.Fail(ErrorMessages.TankNotFound);
-
-            if (tank.CurrentVolume <= 0)
-                return StartFuellingResult.Fail(string.Format(ErrorMessages.NoFuelAvailable, tank.Id));
-            
-            RedisLockToken? tankLock = null;
-            try
-            {
-                tankLock = await _lockProvider.TryAcquireLockAsync(
-                    LockConstants.TankLockKey(tank.Id), TimeSpan.FromSeconds(LockConstants.TankLockExpireTime));
-                if (tankLock == null)
-                    return StartFuellingResult.Fail(string.Format(ErrorMessages.TankIsBusy, tank.Id));
-
-                // double check
-                if (tank.CurrentVolume <= 0)
-                    return StartFuellingResult.Fail(string.Format(ErrorMessages.NoFuelAvailable, tank.Id));
-
-                decimal reserve = Math.Min((decimal)preauthorizedLitres, tank.CurrentVolume);
-                tank.CurrentVolume -= reserve;
-
-                var session = new FuellingSessionEntity
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    StationId = stationId,
-                    PumpId = pump.Id,
-                    TankId = tank.Id,
-                    FuelType = fuelType,
-                    ReservedVolume = reserve,
-                    Status = SessionStatus.Reserved
-                };
-                db.FuellingSessions.Add(session);
-
-                await db.SaveChangesAsync();
-                await _lockProvider.SetTankVolumeAsync(tank.Id, tank.CurrentVolume);
-
-                _pumpLocks[session.Id] = pumpLock;
-                
-                var okResult = StartFuellingResult.Ok(session.Id, (double)reserve);
-                await _idempotencyProvider.SetIdempotencyResultAsync(idempotencyKey, okResult.ToString());
-                return okResult;
-            }
-            finally
-            {
-                if (tankLock != null) await _lockProvider.ReleaseLockAsync(tankLock);
-            }
+            return await ReserveFuelAndCreateSessionAsync(db, pump, fuelType, preauthorizedLitres, stationId,
+                idempotencyKey, pumpLock);
         }
         catch
         {
@@ -120,7 +62,7 @@ public class ReservationManager
 
         var session = await db.FuellingSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.StationId == stationId);
         if (session == null)
-            return CompleteFuellingResult.Fail(ErrorMessages.FuellingSessionNotFound);
+            return CompleteFuellingResult.Fail(string.Format(ErrorMessages.FuellingSessionNotFound, sessionId));
         
         RedisLockToken? pumpLock;
         _pumpLocks.TryGetValue(sessionId, out pumpLock);
@@ -129,20 +71,20 @@ public class ReservationManager
         if (pump == null)
         {
             await ReleasePumpAndCleanupAsync(pumpLock, session, db, sessionId);
-            return CompleteFuellingResult.Fail(ErrorMessages.PumpNotFound);
+            return CompleteFuellingResult.Fail(string.Format(ErrorMessages.PumpNotFound, session.PumpId));
         }
         
         var tank = await db.Tanks.FirstOrDefaultAsync(t => t.Id == session.TankId && t.StationId == stationId);
         if (tank == null)
         {
             await ReleasePumpAndCleanupAsync(pumpLock, session, db, sessionId);
-            return CompleteFuellingResult.Fail(ErrorMessages.TankNotFound);
+            return CompleteFuellingResult.Fail(string.Format(ErrorMessages.TankNotFound, session.TankId));
         }
 
         if (session.Status != SessionStatus.Reserved)
         {
             await ReleasePumpAndCleanupAsync(pumpLock, session, db, sessionId);
-            return CompleteFuellingResult.Fail(ErrorMessages.SessionAlreadyCompleted);
+            return CompleteFuellingResult.Fail(string.Format(ErrorMessages.SessionAlreadyCompleted, sessionId));
         }
         
         RedisLockToken? tankLock = null;
@@ -191,6 +133,26 @@ public class ReservationManager
             .ToListAsync();
     }
     
+    private async Task<StartFuellingResult?> CheckOrAcquireIdempotencyAsync(string idempotencyKey)
+    {
+        if (string.IsNullOrEmpty(idempotencyKey))
+            return StartFuellingResult.Fail(ErrorMessages.IdempotencyKeyNotProvidedForFuelling);
+        
+        var cachedOperationResult = await _idempotencyProvider.GetIdempotencyResultAsync<StartFuellingResult>(idempotencyKey);
+        if (cachedOperationResult != null)
+            return cachedOperationResult;
+        
+        var keyAcquired = await _idempotencyProvider.TrySetIdempotencyKeyAsync(idempotencyKey);
+        if (keyAcquired == false)
+        {
+            var eventualResult = await _idempotencyProvider.WaitForIdempotentResultAsync<StartFuellingResult>(idempotencyKey);
+            return eventualResult ?? StartFuellingResult.Fail(ErrorMessages.IdempotencyConflict);
+        }
+
+        // the key is acquire, we can continue
+        return null;
+    }
+
     private async Task<(PumpEntity? pump, RedisLockToken? lockToken)> SelectAndLockPumpAsync(
         AppDbContext db, string stationId, string? pumpId, FuelType fuelType)
     {
@@ -213,7 +175,7 @@ public class ReservationManager
         }
 
         var pump = await db.Pumps
-            .Include(p => p.Nozzles).ThenInclude(n => n.Tank)
+            .Include(p => p.Nozzles)
             .FirstOrDefaultAsync(p => p.StationId == stationId && p.Id == pumpId);
         if (pump == null)
             return (null, null);
@@ -221,6 +183,69 @@ public class ReservationManager
         pumpLock = await _lockProvider.TryAcquireLockAsync(
             LockConstants.PumpLockKey(pump.Id), TimeSpan.FromSeconds(LockConstants.PumpLockExpireTime));
         return (pump, pumpLock);
+    }
+    
+    private async Task<StartFuellingResult> ReserveFuelAndCreateSessionAsync(
+        AppDbContext db,
+        PumpEntity pump,
+        FuelType fuelType,
+        double preauthorizedLitres,
+        string stationId,
+        string idempotencyKey,
+        RedisLockToken pumpLock)
+    {
+        var nozzle = pump.Nozzles.FirstOrDefault(n => n.FuelType == fuelType);
+            if (nozzle == null)
+                return StartFuellingResult.Fail(ErrorMessages.FuelTypeMismatch);
+
+            var tank = await db.Tanks.FindAsync(nozzle.TankId);
+            if (tank == null)
+                return StartFuellingResult.Fail(string.Format(ErrorMessages.TankNotFound, nozzle.TankId));
+
+            if (tank.CurrentVolume <= 0)
+                return StartFuellingResult.Fail(string.Format(ErrorMessages.NoFuelAvailable, tank.Id));
+            
+            RedisLockToken? tankLock = null;
+            try
+            {
+                tankLock = await _lockProvider.TryAcquireLockAsync(
+                    LockConstants.TankLockKey(tank.Id), TimeSpan.FromSeconds(LockConstants.TankLockExpireTime));
+                if (tankLock == null)
+                    return StartFuellingResult.Fail(string.Format(ErrorMessages.TankIsBusy, tank.Id));
+
+                // double check
+                if (tank.CurrentVolume <= 0)
+                    return StartFuellingResult.Fail(string.Format(ErrorMessages.NoFuelAvailable, tank.Id));
+
+                decimal reserve = Math.Min((decimal)preauthorizedLitres, tank.CurrentVolume);
+                tank.CurrentVolume -= reserve;
+
+                var session = new FuellingSessionEntity
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    StationId = stationId,
+                    PumpId = pump.Id,
+                    TankId = tank.Id,
+                    FuelType = fuelType,
+                    ReservedVolume = reserve,
+                    Status = SessionStatus.Reserved
+                };
+                db.FuellingSessions.Add(session);
+
+                await db.SaveChangesAsync();
+                await _lockProvider.SetTankVolumeAsync(tank.Id, tank.CurrentVolume);
+
+                _pumpLocks[session.Id] = pumpLock;
+                
+                var okResult = StartFuellingResult.Ok(session.Id, (double)reserve);
+                await _idempotencyProvider.SetIdempotencyResultAsync(idempotencyKey, JsonSerializer.Serialize(okResult));
+                return okResult;
+            }
+            finally
+            {
+                if (tankLock != null)
+                    await _lockProvider.ReleaseLockAsync(tankLock);
+            }
     }
     
     private async Task ReleasePumpAndCleanupAsync(RedisLockToken? pumpLock, FuellingSessionEntity session, AppDbContext db, string sessionId)

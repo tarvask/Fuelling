@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Fuel;
 using FuelStation.ReservationService.Constants;
 using FuelStation.ReservationService.Infrastructure;
@@ -53,6 +54,10 @@ public class DeliveryOrchestrator : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         
+        var stationExists = await db.Stations.AnyAsync(s => s.Id == stationId);
+        if (stationExists == false)
+            return StartDeliveryResult.Fail(string.Format(ErrorMessages.StationNotFound, stationId)); 
+        
         var session = new DeliverySessionEntity
         {
             Id = Guid.NewGuid().ToString(),
@@ -71,7 +76,7 @@ public class DeliveryOrchestrator : BackgroundService
         _activeDeliveries.TryAdd(session.Id, deliveryTask);
         _logger.LogInformation("Delivery {SessionId} for station {StationId} started in background", session.Id, stationId);
         var okResult = StartDeliveryResult.Ok(session.Id);
-        await _idempotencyProvider.SetIdempotencyResultAsync(idempotencyKey, okResult.ToString());
+        await _idempotencyProvider.SetIdempotencyResultAsync(idempotencyKey, JsonSerializer.Serialize(okResult));
         return okResult;
     }
 
@@ -87,7 +92,7 @@ public class DeliveryOrchestrator : BackgroundService
             _logger.LogInformation(">>> ExecuteDeliveryProcess STARTED for session {0}", sessionId);
             var sessionEntity = await db.DeliverySessions.FirstOrDefaultAsync(s => s.Id == sessionId);
             if (sessionEntity == null)
-                throw new InvalidOperationException(ErrorMessages.DeliverySessionNotFound);
+                throw new InvalidOperationException(string.Format(ErrorMessages.DeliverySessionNotFound, sessionId));
             
             sessionEntity.Status = DeliverySessionStatus.Scheduled;
             await db.SaveChangesAsync();
@@ -100,7 +105,7 @@ public class DeliveryOrchestrator : BackgroundService
             stationLock = await _lockProvider.TryAcquireLockAsync(
                 LockConstants.StationLockKey(stationId), TimeSpan.FromSeconds(LockConstants.StationLockExpireTime));
             if (stationLock == null)
-                throw new InvalidOperationException( ErrorMessages.StationClosedForDelivering);
+                throw new InvalidOperationException(string.Format(ErrorMessages.StationClosedDeliveryRejected, stationId));
 
             lockAcquired = true;
             sessionEntity.Status = DeliverySessionStatus.Arrived;
@@ -109,7 +114,7 @@ public class DeliveryOrchestrator : BackgroundService
 
             // unloading
             await Task.Delay(GetUnloadTime());
-            await AddFuel(db, stationId, compartments);
+            await AddFuelAsync(db, stationId, compartments);
 
             // completed
             sessionEntity.Status = DeliverySessionStatus.Completed;
@@ -145,7 +150,7 @@ public class DeliveryOrchestrator : BackgroundService
         }
     }
 
-    private async Task AddFuel(AppDbContext db, string stationId, List<Compartment> compartments)
+    private async Task AddFuelAsync(AppDbContext db, string stationId, List<Compartment> compartments)
     {
         foreach (var compartment in compartments)
         {
@@ -157,45 +162,33 @@ public class DeliveryOrchestrator : BackgroundService
 
             foreach (var tank in tanks)
             {
-                RedisLockToken? tankLock = null;
-                bool acquired = false;
-
-                for (int retry = 0; retry < _simulationConfig.MaxTankFillRetriesCount; retry++)
-                {
-                    tankLock = await _lockProvider.TryAcquireLockAsync(
-                        LockConstants.TankLockKey(tank.Id), TimeSpan.FromSeconds(LockConstants.TankLockExpireTime));
-                    if (tankLock != null)
-                    {
-                        acquired = true;
-                        break;
-                    }
-                    if (retry < _simulationConfig.MaxTankFillRetriesCount - 1)
-                        await Task.Delay(_simulationConfig.TankFillRetryDelayMs);
-                }
-
-                if (!acquired)
-                {
-                    throw new InvalidOperationException( string.Format(ErrorMessages.TankIsBusy, tank.Id));
-                }
-
-                try
-                {
-                    // double-check
-                    await db.Entry(tank).ReloadAsync();
-                    var freeSpace = tank.Capacity - tank.CurrentVolume;
-                    var fuelToAdd = Math.Min(fuelToAddForSingleTank, freeSpace);
-                    tank.CurrentVolume += fuelToAdd;
-                    await _lockProvider.SetTankVolumeAsync(tank.Id, tank.CurrentVolume);
-                }
-                finally
-                {
-                    if (acquired && tankLock != null)
-                        await _lockProvider.ReleaseLockAsync(tankLock);
-                }
+                await UpdateTankVolumeAsync(db, tank, fuelToAddForSingleTank);
             }
         }
     }
-    
+
+    private async Task UpdateTankVolumeAsync(AppDbContext db, TankEntity tank, decimal fuelToAdd)
+    {
+        RedisLockToken? tankLock = await TryAcquireLockAsync(tank.Id);
+
+        if (tankLock == null)
+            throw new InvalidOperationException( string.Format(ErrorMessages.TankIsBusy, tank.Id));
+
+        try
+        {
+            // double-check
+            await db.Entry(tank).ReloadAsync();
+            var freeSpace = tank.Capacity - tank.CurrentVolume;
+            var fuelToAddClamped = Math.Min(fuelToAdd, freeSpace);
+            tank.CurrentVolume += fuelToAddClamped;
+            await _lockProvider.SetTankVolumeAsync(tank.Id, tank.CurrentVolume);
+        }
+        finally
+        {
+            await _lockProvider.ReleaseLockAsync(tankLock);
+        }
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
@@ -222,5 +215,21 @@ public class DeliveryOrchestrator : BackgroundService
     {
         int minutes = Random.Shared.Next(_simulationConfig.MinUnloadDurationMinutes, _simulationConfig.MaxUnloadDurationMinutes);
         return minutes * 60 * 1000 / _simulationConfig.SpeedFactor;
+    }
+    
+    private async Task<RedisLockToken?> TryAcquireLockAsync(string tankId)
+    {
+        for (int retry = 0; retry < _simulationConfig.MaxTankFillRetriesCount; retry++)
+        {
+            var tankLock = await _lockProvider.TryAcquireLockAsync(
+                LockConstants.TankLockKey(tankId), TimeSpan.FromSeconds(LockConstants.TankLockExpireTime));
+            if (tankLock != null)
+                return tankLock;
+            
+            if (retry < _simulationConfig.MaxTankFillRetriesCount - 1)
+                await Task.Delay(_simulationConfig.TankFillRetryDelayMs);
+        }
+
+        return default;
     }
 }

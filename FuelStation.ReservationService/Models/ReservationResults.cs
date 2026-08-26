@@ -2,10 +2,10 @@ namespace FuelStation.ReservationService.Models;
 
 public record StartFuellingResult
 {
-    public bool Success { get; private init; }
-    public string? SessionId { get; private init; }
-    public double ReservedLitres { get; private init; }
-    public string? Error { get; private init; }
+    public bool Success { get; set; }
+    public string? SessionId { get; set; }
+    public double ReservedLitres { get; set; }
+    public string? Error { get; set; }
 
     public static StartFuellingResult Fail(string error) =>
         new() { Success = false, Error = error };
