@@ -94,3 +94,6 @@ using var scope = app.Services.CreateScope();
 }
 
 app.Run();
+
+// for test compatibility
+public partial class Program { }
