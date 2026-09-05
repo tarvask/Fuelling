@@ -43,6 +43,8 @@ public class SimulationConfig
     public int MinUnloadDurationMinutes { get; init; }
     public int MaxUnloadDurationMinutes { get; init; }
 
+    public int MaxFuellingRetriesCount { get; init; }
+    public int FuellingRetryDelayMs { get; init; }
     public int MaxTankFillRetriesCount { get; init; }
     public int TankFillRetryDelayMs { get; init; }
 }

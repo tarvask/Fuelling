@@ -7,6 +7,7 @@ using FuelStation.ReservationService.Models;
 using FuelStation.ReservationService.Persistence;
 using FuelStation.ReservationService.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace FuelStation.ReservationService.Services;
 
@@ -15,14 +16,17 @@ public class ReservationManager
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IRedisLockProvider _lockProvider;
     private readonly IRedisIdempotencyProvider _idempotencyProvider;
+    private readonly SimulationConfig _simulationConfig;
     
     private readonly ConcurrentDictionary<string, RedisLockToken> _pumpLocks = new();
 
-    public ReservationManager(IServiceScopeFactory scopeFactory, IRedisLockProvider lockProvider, IRedisIdempotencyProvider idempotencyProvider)
+    public ReservationManager(IServiceScopeFactory scopeFactory, IRedisLockProvider lockProvider, IRedisIdempotencyProvider idempotencyProvider,
+        IOptions<SimulationConfig> options)
     {
         _scopeFactory = scopeFactory;
         _lockProvider = lockProvider;
         _idempotencyProvider = idempotencyProvider;
+        _simulationConfig = options.Value;
     }
 
     public async Task<StartFuellingResult> StartFuellingAsync(string stationId, string? pumpId, FuelType fuelType, double preauthorizedLitres, string idempotencyKey)
@@ -90,8 +94,8 @@ public class ReservationManager
         RedisLockToken? tankLock = null;
         try
         {
-            tankLock = await _lockProvider.TryAcquireLockAsync(
-                LockConstants.TankLockKey(tank.Id), TimeSpan.FromSeconds(LockConstants.TankLockExpireTime));
+            tankLock = await _lockProvider.TryAcquireLockWithRetryAsync(
+                LockConstants.TankLockKey(tank.Id), LockConstants.TankLockExpireTime, _simulationConfig.MaxFuellingRetriesCount, _simulationConfig.FuellingRetryDelayMs);
             if (tankLock == null)
             {
                 await ReleasePumpAndCleanupAsync(pumpLock, session, db, sessionId);
@@ -208,12 +212,13 @@ public class ReservationManager
             RedisLockToken? tankLock = null;
             try
             {
-                tankLock = await _lockProvider.TryAcquireLockAsync(
-                    LockConstants.TankLockKey(tank.Id), TimeSpan.FromSeconds(LockConstants.TankLockExpireTime));
+                tankLock = await _lockProvider.TryAcquireLockWithRetryAsync(
+                    LockConstants.TankLockKey(tank.Id), LockConstants.TankLockExpireTime, _simulationConfig.MaxFuellingRetriesCount, _simulationConfig.FuellingRetryDelayMs);
                 if (tankLock == null)
                     return StartFuellingResult.Fail(string.Format(ErrorMessages.TankIsBusy, tank.Id));
 
                 // double check
+                await db.Entry(tank).ReloadAsync();
                 if (tank.CurrentVolume <= 0)
                     return StartFuellingResult.Fail(string.Format(ErrorMessages.NoFuelAvailable, tank.Id));
 

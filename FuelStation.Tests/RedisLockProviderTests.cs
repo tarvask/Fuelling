@@ -7,6 +7,68 @@ namespace FuelStation.Tests;
 public class RedisLockProviderTests
 {
     [Fact]
+    public async Task TryAcquireLockWithRetryAsync_AcquiresAfterSecondRetry()
+    {
+        //# Arrange
+        var db = Substitute.For<IDatabase>();
+        var multiplexer = Substitute.For<IConnectionMultiplexer>();
+        multiplexer.GetDatabase(Arg.Any<int>(), Arg.Any<object>()).Returns(db);
+
+        var callCount = 0;
+        db.StringSetAsync(
+                Arg.Any<RedisKey>(),
+                Arg.Any<RedisValue>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<When>())
+            .Returns(_ =>
+            {
+                callCount++;
+                return callCount >= 3; // false => false => true
+            });
+
+        var provider = new RedisLockProvider(multiplexer);
+
+        //# Act
+        var token = await provider.TryAcquireLockWithRetryAsync(
+            "lock:test",
+            1,
+            retriesCount: 5,
+            retryDelayMilliseconds: 1);
+
+        //# Assert
+        Assert.NotNull(token);
+        Assert.Equal(3, callCount);
+    }
+
+    [Fact]
+    public async Task TryAcquireLockWithRetryAsync_ReturnsNullWhenAlwaysBusy()
+    {
+        //# Arrange
+        var db = Substitute.For<IDatabase>();
+        var multiplexer = Substitute.For<IConnectionMultiplexer>();
+        multiplexer.GetDatabase(Arg.Any<int>(), Arg.Any<object>()).Returns(db);
+
+        db.StringSetAsync(
+                Arg.Any<RedisKey>(),
+                Arg.Any<RedisValue>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<When>())
+            .Returns(false); // always occupied
+
+        var provider = new RedisLockProvider(multiplexer);
+
+        //# Act
+        var token = await provider.TryAcquireLockWithRetryAsync(
+            "lock:busy",
+            1,
+            retriesCount: 3,
+            retryDelayMilliseconds: 1);
+
+        //# Assert
+        Assert.Null(token);
+    }
+    
+    [Fact]
     public async Task TryAcquireLockAsync_FreeKey_ReturnsToken()
     {
         //# Arrange

@@ -169,7 +169,8 @@ public class DeliveryOrchestrator : BackgroundService
 
     private async Task UpdateTankVolumeAsync(AppDbContext db, TankEntity tank, decimal fuelToAdd)
     {
-        RedisLockToken? tankLock = await TryAcquireLockAsync(tank.Id);
+        RedisLockToken? tankLock = await _lockProvider.TryAcquireLockWithRetryAsync(LockConstants.TankLockKey(tank.Id),
+            LockConstants.TankLockExpireTime, _simulationConfig.MaxTankFillRetriesCount, _simulationConfig.TankFillRetryDelayMs);
 
         if (tankLock == null)
             throw new InvalidOperationException( string.Format(ErrorMessages.TankIsBusy, tank.Id));
@@ -215,21 +216,5 @@ public class DeliveryOrchestrator : BackgroundService
     {
         int minutes = Random.Shared.Next(_simulationConfig.MinUnloadDurationMinutes, _simulationConfig.MaxUnloadDurationMinutes);
         return minutes * 60 * 1000 / _simulationConfig.SpeedFactor;
-    }
-    
-    private async Task<RedisLockToken?> TryAcquireLockAsync(string tankId)
-    {
-        for (int retry = 0; retry < _simulationConfig.MaxTankFillRetriesCount; retry++)
-        {
-            var tankLock = await _lockProvider.TryAcquireLockAsync(
-                LockConstants.TankLockKey(tankId), TimeSpan.FromSeconds(LockConstants.TankLockExpireTime));
-            if (tankLock != null)
-                return tankLock;
-            
-            if (retry < _simulationConfig.MaxTankFillRetriesCount - 1)
-                await Task.Delay(_simulationConfig.TankFillRetryDelayMs);
-        }
-
-        return default;
     }
 }

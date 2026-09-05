@@ -215,6 +215,8 @@ public class DeliveryOrchestratorTests
         var lockKey = LockConstants.TankLockKey(tankId);
         lockProvider.TryAcquireLockAsync(lockKey, Arg.Any<TimeSpan>())
             .Returns((RedisLockToken?)null);
+        lockProvider.TryAcquireLockWithRetryAsync(lockKey, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>())
+            .Returns((RedisLockToken?)null);
         lockProvider.IsLockedAsync(lockKey).Returns(true);
         
         var compartments = new List<Compartment> { new() { FuelType = FuelType.Ai95, Litres = 1000 } };

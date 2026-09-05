@@ -8,6 +8,7 @@ using FuelStation.ReservationService.Persistence.Entities;
 using FuelStation.ReservationService.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 
 namespace FuelStation.Tests;
@@ -157,6 +158,8 @@ public class ReservationManagerTests
         var redisLockMock = serviceProvider.GetRequiredService<IRedisLockProvider>();
         redisLockMock.IsLockedAsync(pumpId).Returns(true);
         redisLockMock.TryAcquireLockAsync(LockConstants.PumpLockKey(pumpId), Arg.Any<TimeSpan>()).Returns((RedisLockToken?)null);
+        redisLockMock.TryAcquireLockWithRetryAsync(LockConstants.PumpLockKey(pumpId),
+            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>()).Returns((RedisLockToken?)null);
         
         //# Act
         const FuelType fuelType = FuelType.Ai95;
@@ -198,6 +201,8 @@ public class ReservationManagerTests
         var redisLockMock = serviceProvider.GetRequiredService<IRedisLockProvider>();
         redisLockMock.IsLockedAsync(pumpId).Returns(true);
         redisLockMock.TryAcquireLockAsync(LockConstants.PumpLockKey(pumpId), Arg.Any<TimeSpan>()).Returns((RedisLockToken?)null);
+        redisLockMock.TryAcquireLockWithRetryAsync(LockConstants.PumpLockKey(pumpId),
+            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>()).Returns((RedisLockToken?)null);
         
         //# Act
         const FuelType fuelType = FuelType.Ai95;
@@ -237,8 +242,9 @@ public class ReservationManagerTests
         
         // lock station
         var redisLockMock = serviceProvider.GetRequiredService<IRedisLockProvider>();
-        redisLockMock.TryAcquireLockAsync(Arg.Any<string>(), Arg.Any<TimeSpan>())
-            .Returns((RedisLockToken?)null);
+        redisLockMock.TryAcquireLockAsync(Arg.Any<string>(), Arg.Any<TimeSpan>()).Returns((RedisLockToken?)null);
+        redisLockMock.TryAcquireLockWithRetryAsync(Arg.Any<string>(),
+            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>()).Returns((RedisLockToken?)null);
         redisLockMock.IsLockedAsync(Arg.Any<string>()).Returns(true);
         
         //# Act
@@ -686,6 +692,8 @@ public class ReservationManagerTests
         var redisLockMock = serviceProvider.GetRequiredService<IRedisLockProvider>();
         redisLockMock.IsLockedAsync(LockConstants.TankLockKey(tankId)).Returns(true);
         redisLockMock.TryAcquireLockAsync(LockConstants.TankLockKey(tankId), Arg.Any<TimeSpan>()).Returns((RedisLockToken?)null);
+        redisLockMock.TryAcquireLockWithRetryAsync(LockConstants.TankLockKey(tankId),
+            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>()).Returns((RedisLockToken?)null);
         
         const FuelType fuelType = FuelType.Ai95;
         const int volume = 50;
@@ -722,7 +730,8 @@ public class ReservationManagerTests
     private (ReservationManager manager, ServiceProvider serviceProvider, IServiceScopeFactory scopeFactory) CreateManagerWithInMemoryDb()
     {
         var (serviceProvider, scopeFactory, redisLock, idempotency, _) = TestHelpers.CreateServiceProviderWithMocks();
-        var manager = new ReservationManager(scopeFactory, redisLock, idempotency);
+        var manager = new ReservationManager(scopeFactory, redisLock, idempotency,
+            serviceProvider.GetRequiredService<IOptions<SimulationConfig>>());
         return (manager, serviceProvider, scopeFactory);
     }
 

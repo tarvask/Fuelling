@@ -6,6 +6,7 @@ namespace FuelStation.ReservationService.Infrastructure;
 
 public interface IRedisLockProvider
 {
+    Task<RedisLockToken?> TryAcquireLockWithRetryAsync(string lockKey, int lockExpireTimeSeconds, int retriesCount, int retryDelayMilliseconds);
     Task<RedisLockToken?> TryAcquireLockAsync(string key, TimeSpan expiry);
     Task ReleaseLockAsync(RedisLockToken lockToken);
     Task SetTankVolumeAsync(string tankId, decimal volume);
@@ -19,6 +20,27 @@ public class RedisLockProvider : IRedisLockProvider
     public RedisLockProvider(IConnectionMultiplexer multiplexer)
     {
         _db = multiplexer.GetDatabase();
+    }
+    
+    public async Task<RedisLockToken?> TryAcquireLockWithRetryAsync(string lockKey, int lockExpireTimeSeconds, int retriesCount, int retryDelayMilliseconds)
+    {
+        for (var retry = 0; retry < retriesCount; retry++)
+        {
+            var tankLock = await TryAcquireLockAsync(
+                lockKey, TimeSpan.FromSeconds(lockExpireTimeSeconds));
+            if (tankLock != null)
+                return tankLock;
+
+            if (retry < retriesCount - 1)
+            {
+                // Exponential backoff with jitter to prevent synchronized retries
+                var baseDelay = retryDelayMilliseconds * (1 << retry); // 2^retry
+                var jitter = Random.Shared.Next(0, baseDelay / 2 + 1);
+                await Task.Delay(baseDelay + jitter);
+            }
+        }
+
+        return default;
     }
 
     public async Task<RedisLockToken?> TryAcquireLockAsync(string key, TimeSpan expiry)

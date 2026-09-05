@@ -1,6 +1,4 @@
-using System.Text.Json;
 using Fuel;
-using FuelStation.ReservationService.Constants;
 using FuelStation.ReservationService.Infrastructure;
 using FuelStation.ReservationService.Models;
 using FuelStation.ReservationService.Persistence;
@@ -30,6 +28,9 @@ public static class TestHelpers
         // locks can always be captured
         redisLockMock.TryAcquireLockAsync(Arg.Any<string>(), Arg.Any<TimeSpan>())
             .Returns(new RedisLockToken("mock-key", "mock-token"));
+        redisLockMock.TryAcquireLockWithRetryAsync(Arg.Any<string>(),
+                Arg.Any<int>(),Arg.Any<int>(), Arg.Any<int>())
+            .Returns(new RedisLockToken("mock-key", "mock-token"));
         redisLockMock.IsLockedAsync(Arg.Any<string>()).Returns(false);
         
         var redisIdempotencyMock = Substitute.For<IRedisIdempotencyProvider>();
@@ -42,12 +43,21 @@ public static class TestHelpers
         services.AddSingleton(redisLockMock);
         services.AddSingleton(redisIdempotencyMock);
         services.AddSingleton(kafka);
-        if (simulationConfig != null)
-            services.AddSingleton(simulationConfig);
+        simulationConfig ??= Options.Create(new SimulationConfig
+        {
+            MaxTankFillRetriesCount = 3,
+            TankFillRetryDelayMs = 10,
+            MinDeliveryDurationMinutes = 0,
+            MaxDeliveryDurationMinutes = 0,
+            MinUnloadDurationMinutes = 0,
+            MaxUnloadDurationMinutes = 0,
+            SpeedFactor = 1
+        });
         
+        services.AddSingleton(simulationConfig);
+
         var serviceProvider = services.BuildServiceProvider();
         var scopeFactory = serviceProvider.GetRequiredService<IServiceScopeFactory>();
-        var manager = new ReservationManager(scopeFactory, redisLockMock, redisIdempotencyMock);
         
         return (serviceProvider, scopeFactory, redisLockMock, redisIdempotencyMock, kafka);
     }
