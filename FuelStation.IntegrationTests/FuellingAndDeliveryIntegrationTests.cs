@@ -99,31 +99,38 @@ public class FuellingAndDeliveryIntegrationTests : IntegrationTestBase
         //# Assert: start succeeded
         Assert.True(startReply.Success);
         Assert.False(string.IsNullOrEmpty(startReply.SessionId));
+        
+        DeliverySessionEntity? session = null;
 
         // Check session exists in DB with status Completed
         using (var scope = Fixture.Factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            DeliverySessionEntity? session = null;
 
             const int maxRetryCount = 20;
             for (var i = 0; i < maxRetryCount; i++)
             {
                 await Task.Delay(300);
+                // reload from db
                 session = await db.DeliverySessions.FindAsync(startReply.SessionId);
+                // for already tracked items FindAsync returns cache,
+                // so force reloading
+                if (session != null) await db.Entry(session).ReloadAsync();
 
                 if (session != null && session.Status == DeliverySessionStatus.Completed)
                     break;
             }
-
-            Assert.NotNull(session);
-            Assert.Equal(DeliverySessionStatus.Completed, session.Status);
         }
-
-        // Check tank volume updated: 500 - 100 + (100-80) = 420
+        
         using (var scope = Fixture.Factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            
+            session = await db.DeliverySessions.FindAsync(startReply.SessionId);
+            Assert.NotNull(session);
+            Assert.Equal(DeliverySessionStatus.Completed, session.Status);
+            
+            // Check tank volume updated: 500 + 300 = 800
             var tank = await db.Tanks.FindAsync(TankId);
             Assert.Equal(800, tank!.CurrentVolume);
         }
@@ -147,7 +154,11 @@ public class FuellingAndDeliveryIntegrationTests : IntegrationTestBase
             for (var i = 0; i < maxRetryCount; i++)
             {
                 await Task.Delay(300);
-                var session = await db.DeliverySessions.FindAsync(startReply.SessionId);
+                // reload from db
+                session = await db.DeliverySessions.FindAsync(startReply.SessionId);
+                // for already tracked items FindAsync returns cache,
+                // so force reloading
+                if (session != null) await db.Entry(session).ReloadAsync();
 
                 if (session != null && session.Status == DeliverySessionStatus.Completed)
                     break;
