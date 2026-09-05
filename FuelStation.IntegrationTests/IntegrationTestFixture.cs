@@ -58,15 +58,17 @@ public class IntegrationTestFixture : IAsyncLifetime
                     config.AddInMemoryCollection(new Dictionary<string, string?>
                     {
                         [ConnectionStringsDefault] = _postgresContainer.GetConnectionString(),
-                        [RedisConnectionString] = _redisContainer.GetConnectionString(),
+                        [RedisConnectionString] = _redisContainer.GetConnectionString() + ",allowAdmin=true",
                         [KafkaBootstrapServersString] = _kafkaContainer.GetBootstrapAddress(),
                         
                         // speed up simulation a bit
                         ["Simulation:MinDeliveryDurationMinutes"] = "0",
                         ["Simulation:MaxDeliveryDurationMinutes"] = "0",
-                        ["Simulation:MinUnloadDurationMinutes"] = "0",
-                        ["Simulation:MaxUnloadDurationMinutes"] = "0",
-                        ["Simulation:SpeedFactor"] = "1"
+                        ["Simulation:MinUnloadDurationMinutes"] = "1",
+                        ["Simulation:MaxUnloadDurationMinutes"] = "1",
+                        ["Simulation:SpeedFactor"] = "60",
+                        ["Simulation:MaxTankFillRetriesCount"] = "3",
+                        ["Simulation:TankFillRetryDelayMs"] = "10"
                     });
                 });
 
@@ -93,15 +95,13 @@ public class IntegrationTestFixture : IAsyncLifetime
     public GrpcChannel CreateGrpcChannel()
     {
         var httpClient = Factory.CreateDefaultClient();
-        var channel = GrpcChannel.ForAddress(GrpcServerAddress, new GrpcChannelOptions
-        {
-            HttpClient = httpClient
-        });
+        var channel = GrpcChannel.ForAddress(GrpcServerAddress, new GrpcChannelOptions { HttpClient = httpClient });
         return channel;
     }
     
     public async Task ResetDatabaseAsync()
     {
+        // clear Postgres db
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.DeliveryCompartments.RemoveRange(db.DeliveryCompartments);
@@ -112,5 +112,10 @@ public class IntegrationTestFixture : IAsyncLifetime
         db.Tanks.RemoveRange(db.Tanks);
         db.Stations.RemoveRange(db.Stations);
         await db.SaveChangesAsync();
+        
+        // clear Redis db
+        var multiplexer = Factory.Services.GetRequiredService<StackExchange.Redis.IConnectionMultiplexer>();
+        var server = multiplexer.GetServer(multiplexer.GetEndPoints().First());
+        await server.FlushDatabaseAsync();
     }
 }
