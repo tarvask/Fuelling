@@ -4,6 +4,11 @@ using FuelStation.Simulator.Infrastructure;
 using FuelStation.Simulator.Models;
 using FuelStation.Simulator.Services;
 using Microsoft.Extensions.Configuration;
+using OpenTelemetry;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+
+const int grpcOtlpPort = 4317;
 
 var basePath = AppContext.BaseDirectory;
 var configuration = new ConfigurationBuilder()
@@ -21,6 +26,15 @@ if (simulationConfig == null)
 }
 
 var simulationConfigProvider = new SimulationConfigProvider(configuration);
+
+
+var otlpEndpoint = configuration["OTLP_ENDPOINT"] ?? $"http://localhost:{grpcOtlpPort}";
+
+using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+    .ConfigureResource(resource => resource.AddService("Simulator"))
+    .AddGrpcClientInstrumentation()
+    .AddOtlpExporter(options => { options.Endpoint = new Uri(otlpEndpoint); })
+    .Build();
 
 var handler = new HttpClientHandler
 {

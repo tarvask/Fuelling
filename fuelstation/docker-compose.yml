@@ -1,6 +1,7 @@
 x-common-variables: &common-vars
   Simulation__SpeedFactor: 60
   Grpc__GrpcAddress: "http://reservation-service:5001"
+  OTLP_ENDPOINT: "http://otel-collector:4317"
 
 services:
   kafka:
