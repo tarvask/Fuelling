@@ -56,6 +56,25 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+      
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    command: [ "--config=/etc/otel-collector-config.yml" ]
+    volumes:
+      - ./otel-collector-config.yml:/etc/otel-collector-config.yml
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    depends_on:
+      - jaeger
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"  # UI
+      #- "4317:4317"    # is needed, when otel-collector not used
         
   reservation-service:
     platform: linux/amd64
@@ -72,6 +91,7 @@ services:
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=fuelstation;Username=fuelapp;Password=ai100"
       Redis__ConnectionString: "redis:6379"
       Kafka__BootstrapServers: "kafka:9094"
+      OTLP_ENDPOINT: "http://otel-collector:4317"
     depends_on:
       postgres:
         condition: service_healthy

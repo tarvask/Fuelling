@@ -8,7 +8,13 @@ using FuelStation.Shared.Constants;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using StackExchange.Redis;
+
+const int http1Port = 5000;
+const int http2Port = 5001;
+const int grpcOtlpPort = 4317;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.json", optional: false).AddEnvironmentVariables();
@@ -45,17 +51,20 @@ builder.Services.AddSingleton<IRedisIdempotencyProvider, RedisIdempotencyProvide
 builder.WebHost.ConfigureKestrel(options =>
 {
     // gRPC port (only HTTP/2)
-    options.ListenAnyIP(5001, listenOptions =>
-    {
-        listenOptions.Protocols = HttpProtocols.Http2;
-    });
+    options.ListenAnyIP(http2Port, listenOptions => { listenOptions.Protocols = HttpProtocols.Http2; });
 
     // Healthcheck + REST port (only HTTP/1.1)
-    options.ListenAnyIP(5000, listenOptions =>
-    {
-        listenOptions.Protocols = HttpProtocols.Http1;
-    });
+    options.ListenAnyIP(http1Port, listenOptions => { listenOptions.Protocols = HttpProtocols.Http1; });
 });
+
+var otlpEndpoint = builder.Configuration["OTLP_ENDPOINT"] ?? $"http://localhost:{grpcOtlpPort}";
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService("ReservationService"))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddGrpcClientInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddOtlpExporter(options => { options.Endpoint = new Uri(otlpEndpoint); }));
 
 var app = builder.Build();
 
@@ -82,7 +91,7 @@ using (var adminClient = new AdminClientBuilder(adminConfig).Build())
 app.MapGrpcService<FuelReservationService>();
 app.MapGet("/", () => "ReservationService is running");
 
-Console.WriteLine("ReservationService gRPC + HTTP on http://localhost:5001");
+Console.WriteLine($"ReservationService gRPC + HTTP on http://localhost:{http2Port}");
 
 using var scope = app.Services.CreateScope();
 {
