@@ -4,15 +4,8 @@ namespace FuelStation.PaymentService.Infrastructure;
 
 public class KafkaConfigurationProvider
 {
-    public KafkaConfigurationProvider()
+    public KafkaConfigurationProvider(IConfiguration configuration)
     {
-        var basePath = AppContext.BaseDirectory;
-        var configuration = new ConfigurationBuilder()
-            .SetBasePath(basePath)
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-            .AddEnvironmentVariables()
-            .Build();
-
         BootstrapServers =
             Environment.GetEnvironmentVariable("Kafka__BootstrapServers")
             ?? configuration.GetValue<string>("Kafka:BootstrapServers")

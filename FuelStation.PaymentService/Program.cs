@@ -1,24 +1,29 @@
-﻿using System.Globalization;
-using Confluent.Kafka;
-using System.Text.Json;
-using FuelStation.PaymentService.Infrastructure;
-using FuelStation.PaymentService.Models;
+﻿using FuelStation.PaymentService.Infrastructure;
+using FuelStation.PaymentService.Services;
 using FuelStation.Shared.Constants;
+using Microsoft.Extensions.Configuration;
+using OpenTelemetry;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
-var kafkaConfigProvider = new KafkaConfigurationProvider();
-var config = new ConsumerConfig
-{
-    BootstrapServers = kafkaConfigProvider.BootstrapServers,
-    GroupId = KafkaGroups.PaymentService,
-    AutoOffsetReset = AutoOffsetReset.Earliest
-};
+var configuration = new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddEnvironmentVariables()
+    .Build();
 
-var configJson = File.ReadAllText("appsettings.json");
-var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-var pricesConfig = JsonSerializer.Deserialize<PricesConfig>(configJson, options)!;
+var kafkaConfigProvider = new KafkaConfigurationProvider(configuration);
+var otlpConfigProvider = new OtlpConfigurationProvider(configuration);
 
-using var consumer = new ConsumerBuilder<string, string>(config).Build();
-consumer.Subscribe(KafkaTopics.FuellingCompleted);
+// Prices
+var prices = configuration.GetSection("Prices").Get<Dictionary<string, double>>() 
+             ?? new Dictionary<string, double>();
+
+using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+    .ConfigureResource(resource => resource.AddService(OpenTelemetryConstants.PaymentService))
+    .AddSource(OpenTelemetryConstants.PaymentServiceSource)
+    .AddOtlpExporter(exporterOptions => { exporterOptions.Endpoint = new Uri(otlpConfigProvider.Endpoint); })
+    .Build();
 
 Console.WriteLine($"PaymentService is listening to {KafkaTopics.FuellingCompleted}...");
 
@@ -30,38 +35,14 @@ Console.CancelKeyPress += (_, e) =>
     Console.WriteLine("Shutting down Payment Service...");
 };
 
+var paymentProcessingService = new PaymentProcessingService(prices);
+var kafkaConsumerService = new KafkaConsumerService(kafkaConfigProvider, paymentProcessingService);
+
 try
 {
-    while (!cts.Token.IsCancellationRequested)
-    {
-        try
-        {
-            var cr = consumer.Consume(cts.Token);
-            var payload = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(cr.Message.Value);
-            var stationId = payload![KafkaMessageKeys.StationId].GetString();
-            var sessionId = payload![KafkaMessageKeys.SessionId].GetString();
-            var fuelType = payload[KafkaMessageKeys.FuelType].GetString();
-            var litres = payload[KafkaMessageKeys.ActualLitres].GetDouble();
-            if (fuelType != null && pricesConfig.Prices.TryGetValue(fuelType, out var fuelPrice))
-            {
-                var price = litres * fuelPrice;
-                Console.WriteLine($">>> BILL: station {stationId}, session {sessionId}, {litres.ToString("F1", CultureInfo.InvariantCulture)}L of {fuelType}. Paid {price.ToString("F1", CultureInfo.InvariantCulture)}.");
-            }
-            else
-            {
-                Console.WriteLine($">>> ERROR: bad fuelType {fuelType} in session {sessionId} at station {stationId}.");
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // normal termination
-            break;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"PaymentService error: {ex.Message}");
-        }
-    }
+    await kafkaConsumerService.StartAsync(cts.Token);
+    // block main thread, until Ctrl+C is received
+    await Task.Delay(Timeout.Infinite, cts.Token);
 }
 catch (OperationCanceledException)
 {
@@ -69,5 +50,5 @@ catch (OperationCanceledException)
 }
 finally
 {
-    consumer.Close();
+    await kafkaConsumerService.StopAsync(CancellationToken.None);
 }

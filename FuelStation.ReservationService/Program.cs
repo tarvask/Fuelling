@@ -8,6 +8,8 @@ using FuelStation.Shared.Constants;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using OpenTelemetry;
+using OpenTelemetry.Context.Propagation;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using StackExchange.Redis;
@@ -57,11 +59,33 @@ builder.WebHost.ConfigureKestrel(options =>
     options.ListenAnyIP(http1Port, listenOptions => { listenOptions.Protocols = HttpProtocols.Http1; });
 });
 
-var otlpEndpoint = builder.Configuration["OTLP_ENDPOINT"] ?? $"http://localhost:{grpcOtlpPort}";
+var otlpEndpoint = builder.Configuration["OtlpEndpoint"] ?? $"http://localhost:{grpcOtlpPort}";
+Sdk.SetDefaultTextMapPropagator(new CompositeTextMapPropagator(new TextMapPropagator[]
+{
+    new TraceContextPropagator(),
+    new BaggagePropagator()
+}));
 builder.Services.AddOpenTelemetry()
-    .ConfigureResource(resource => resource.AddService("ReservationService"))
+    .ConfigureResource(resource => resource.AddService(OpenTelemetryConstants.ReservationService))
     .WithTracing(tracing => tracing
-        .AddAspNetCoreInstrumentation()
+        .AddAspNetCoreInstrumentation(options =>
+        {
+            options.EnrichWithHttpRequest = (activity, httpRequest) =>
+            {
+                var extracted = Propagators.DefaultTextMapPropagator.Extract(
+                    default,
+                    httpRequest.Headers,
+                    (headers, key) =>
+                        headers.TryGetValue(key, out var value)
+                            ? value
+                            : Enumerable.Empty<string>());
+                
+                foreach (var item in extracted.Baggage)
+                {
+                    activity.SetTag($"{OpenTelemetryConstants.BaggageKeys.BaggagePrefix}{item.Key}", item.Value);
+                }
+            };
+        })
         .AddGrpcClientInstrumentation()
         .AddHttpClientInstrumentation()
         .AddOtlpExporter(options => { options.Endpoint = new Uri(otlpEndpoint); }));

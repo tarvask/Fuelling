@@ -1,10 +1,12 @@
 ﻿using Grpc.Net.Client;
 using Fuel;
+using FuelStation.Shared.Constants;
 using FuelStation.Simulator.Infrastructure;
 using FuelStation.Simulator.Models;
 using FuelStation.Simulator.Services;
 using Microsoft.Extensions.Configuration;
 using OpenTelemetry;
+using OpenTelemetry.Context.Propagation;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
@@ -27,12 +29,32 @@ if (simulationConfig == null)
 
 var simulationConfigProvider = new SimulationConfigProvider(configuration);
 
+var otlpEndpoint = configuration["OtlpEndpoint"] ?? $"http://localhost:{grpcOtlpPort}";
 
-var otlpEndpoint = configuration["OTLP_ENDPOINT"] ?? $"http://localhost:{grpcOtlpPort}";
-
+Sdk.SetDefaultTextMapPropagator(new CompositeTextMapPropagator(new TextMapPropagator[]
+{
+    new TraceContextPropagator(),
+    new BaggagePropagator()
+}));
 using var tracerProvider = Sdk.CreateTracerProviderBuilder()
-    .ConfigureResource(resource => resource.AddService("Simulator"))
-    .AddGrpcClientInstrumentation()
+    .ConfigureResource(resource => resource.AddService(OpenTelemetryConstants.Simulator))
+    .AddGrpcClientInstrumentation(options =>
+    {
+        options.EnrichWithHttpRequestMessage = (activity, request) =>
+        {
+            var propagator = Propagators.DefaultTextMapPropagator;
+            propagator.Inject(
+                new PropagationContext(activity.Context, Baggage.Current),
+                request.Headers,
+                (headers, key, value) => headers.Add(key, value));
+
+            // Add baggage items as tags on the current client span
+            foreach (var item in Baggage.Current)
+            {
+                activity.SetTag($"{OpenTelemetryConstants.BaggageKeys.BaggagePrefix}{item.Key}", item.Value);
+            }
+        };
+    })
     .AddOtlpExporter(options => { options.Endpoint = new Uri(otlpEndpoint); })
     .Build();
 

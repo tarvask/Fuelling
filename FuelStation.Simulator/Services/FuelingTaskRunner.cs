@@ -1,7 +1,9 @@
 using Fuel;
+using FuelStation.Shared.Constants;
 using FuelStation.Shared.Utilities;
 using FuelStation.Simulator.Infrastructure;
 using FuelStation.Simulator.Models;
+using OpenTelemetry;
 
 namespace FuelStation.Simulator.Services;
 
@@ -20,6 +22,7 @@ public class FuelingTaskRunner
 
     public async Task RunRandomFuellingAsync(FuelReservation.FuelReservationClient fuelReservationClient)
     {
+        Baggage.Current = Baggage.Current.SetBaggage(OpenTelemetryConstants.BaggageKeys.StationId, _stationId);
         var fuelRequest = CreateRandomFuelData(_simulationConfig.FuelProbabilities, _stationId, _simulationConfig.MinLitres, _simulationConfig.MaxLitres);
         await FuelSingleCarSafeAsync(fuelReservationClient, fuelRequest);
     }

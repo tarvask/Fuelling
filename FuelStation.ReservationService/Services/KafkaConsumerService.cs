@@ -11,8 +11,8 @@ public class KafkaConsumerService : BackgroundService
 
     public KafkaConsumerService(KafkaConfigurationProvider kafkaConfigProvider)
     {
-        Console.WriteLine($"[KafkaConsumerService] Kafka bootstrap servers: {kafkaConfigProvider.BootstrapServers}");
         _bootstrapServers = kafkaConfigProvider.BootstrapServers;
+        Console.WriteLine($"[KafkaConsumerService] Kafka bootstrap servers: {_bootstrapServers}");
     }
     
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
