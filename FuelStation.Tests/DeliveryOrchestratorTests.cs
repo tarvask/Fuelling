@@ -158,7 +158,8 @@ public class DeliveryOrchestratorTests
         
         //# Assert
         Assert.False(result.Success);
-        Assert.Contains(string.Format(ErrorMessages.StationNotFound, wrongStationId), result.Error);
+        Assert.Equal(ErrorCatalog.StationNotFound.Code, result.ErrorCode);
+        Assert.Contains(ErrorCatalog.StationNotFound.Format(wrongStationId), result.ErrorText);
         using (var assertScope = scopeFactory.CreateScope())
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -256,7 +257,7 @@ public class DeliveryOrchestratorTests
         
         //# Assert
         Assert.False(result.Success);
-        Assert.Contains(string.Format(ErrorMessages.IdempotencyKeyNotProvidedForDelivering), result.Error);
+        Assert.Contains(ErrorCatalog.IdempotencyKeyNotProvidedForDelivering.Code, result.ErrorCode);
         using (var assertScope = scopeFactory.CreateScope())
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();

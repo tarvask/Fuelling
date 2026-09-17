@@ -7,23 +7,34 @@ public record StartFuellingResult
     public bool Success { get; init; }
     public string? SessionId { get; init; }
     public double ReservedLitres { get; init; }
-    public string? Error { get; init; }
-    
+    public int? ErrorNumericCode { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorText { get; init; }
+
     // private constructor for Fail/Ok fabric methods
     private StartFuellingResult() { }
 
     // constructor to use with System.Text.Json
     [JsonConstructor]
-    public StartFuellingResult(bool success, string? sessionId, double reservedLitres, string? error)
+    public StartFuellingResult(bool success, string? sessionId, double reservedLitres, int? errorNumericCode, string? errorCode, string? errorText)
     {
         Success = success;
         SessionId = sessionId;
         ReservedLitres = reservedLitres;
-        Error = error;
+        ErrorNumericCode = errorNumericCode;
+        ErrorCode = errorCode;
+        ErrorText = errorText;
     }
-
-    public static StartFuellingResult Fail(string error) =>
-        new() { Success = false, Error = error };
+    
+    public static StartFuellingResult Fail(ErrorInfo error, params object[] args) =>
+        new()
+        {
+            Success = false,
+            
+            ErrorNumericCode = error.NumericCode,
+            ErrorCode = error.Code,
+            ErrorText = error.Format(args)
+        };
 
     public static StartFuellingResult Ok(string sessionId, double reservedLitres) =>
         new() { Success = true, SessionId = sessionId, ReservedLitres = reservedLitres };
@@ -32,10 +43,19 @@ public record StartFuellingResult
 public record CompleteFuellingResult
 {
     public bool Success { get; private init; }
-    public string? Error { get; private init; }
+    public int? ErrorNumericCode { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorText { get; init; }
 
-    public static CompleteFuellingResult Fail(string error) =>
-        new() { Success = false, Error = error };
+    public static CompleteFuellingResult Fail(ErrorInfo error, params object[] args) =>
+        new()
+        {
+            Success = false,
+            
+            ErrorNumericCode = error.NumericCode,
+            ErrorCode = error.Code,
+            ErrorText = error.Format(args)
+        };
 
     public static CompleteFuellingResult Ok() =>
         new() { Success = true };
@@ -45,22 +65,33 @@ public record StartDeliveryResult
 {
     public bool Success { get; private init; }
     public string? SessionId { get; private init; }
-    public string? Error { get; private init; }
+    public int? ErrorNumericCode { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorText { get; init; }
     
     // private constructor for Fail/Ok fabric methods
     private StartDeliveryResult() {}
     
     // constructor to use with System.Text.Json
     [JsonConstructor]
-    public StartDeliveryResult(bool success, string? sessionId, string? error)
+    public StartDeliveryResult(bool success, string? sessionId, int? errorNumericCode, string? errorCode, string? errorText)
     {
         Success = success;
         SessionId = sessionId;
-        Error = error;
+        ErrorNumericCode = errorNumericCode;
+        ErrorCode = errorCode;
+        ErrorText = errorText;
     }
 
-    public static StartDeliveryResult Fail(string error) =>
-        new() { Success = false, Error = error };
+    public static StartDeliveryResult Fail(ErrorInfo error, params object[] args) =>
+        new()
+        {
+            Success = false,
+            
+            ErrorNumericCode = error.NumericCode,
+            ErrorCode = error.Code,
+            ErrorText = error.Format(args)
+        };
 
     public static StartDeliveryResult Ok(string sessionId) =>
         new() { Success = true, SessionId = sessionId };

@@ -40,7 +40,7 @@ public class ReservationManagerTests
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
             
-            Assert.True(result.Success, result.Error);
+            Assert.True(result.Success, result.ErrorText);
             Assert.False(string.IsNullOrEmpty(result.SessionId));
 
             var updatedTank = await db.Tanks.FindAsync(tankId);
@@ -89,7 +89,7 @@ public class ReservationManagerTests
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
             
-            Assert.False(result.Success, result.Error);
+            Assert.False(result.Success, result.ErrorText);
             Assert.True(string.IsNullOrEmpty(result.SessionId));
 
             var updatedTank = await db.Tanks.FindAsync(tankId);
@@ -97,7 +97,8 @@ public class ReservationManagerTests
 
             var session = await db.FuellingSessions.FirstOrDefaultAsync();
             Assert.Null(session);
-            Assert.Contains(string.Format(ErrorMessages.PumpNotAutoSelected, fuelType), result.Error);
+            Assert.Equal(ErrorCatalog.PumpNotAutoSelected.Code, result.ErrorCode);
+            Assert.Contains(ErrorCatalog.PumpNotAutoSelected.Format(fuelType), result.ErrorText);
         }
     }
     
@@ -134,7 +135,7 @@ public class ReservationManagerTests
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
             
-            Assert.False(result.Success, result.Error);
+            Assert.False(result.Success, result.ErrorText);
             Assert.True(string.IsNullOrEmpty(result.SessionId));
 
             var updatedTank = await db.Tanks.FindAsync(tankId);
@@ -142,7 +143,8 @@ public class ReservationManagerTests
 
             var session = await db.FuellingSessions.FirstOrDefaultAsync();
             Assert.Null(session);
-            Assert.Contains(string.Format(ErrorMessages.NoFuelAvailable, tankId), result.Error);
+            Assert.Equal(ErrorCatalog.NoFuelAvailable.Code, result.ErrorCode);
+            Assert.Contains(ErrorCatalog.NoFuelAvailable.Format(tankId), result.ErrorText);
         }
     }
     
@@ -177,7 +179,7 @@ public class ReservationManagerTests
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
             
-            Assert.False(result.Success, result.Error);
+            Assert.False(result.Success, result.ErrorText);
             Assert.True(string.IsNullOrEmpty(result.SessionId));
 
             var updatedTank = await db.Tanks.FindAsync(tankId);
@@ -185,7 +187,8 @@ public class ReservationManagerTests
 
             var session = await db.FuellingSessions.FirstOrDefaultAsync();
             Assert.Null(session);
-            Assert.Contains(string.Format(ErrorMessages.PumpNotAutoSelected, fuelType), result.Error);
+            Assert.Equal(ErrorCatalog.PumpNotAutoSelected.Code, result.ErrorCode);
+            Assert.Contains(ErrorCatalog.PumpNotAutoSelected.Format(fuelType), result.ErrorText);
         }
     }
     
@@ -220,7 +223,7 @@ public class ReservationManagerTests
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
             
-            Assert.False(result.Success, result.Error);
+            Assert.False(result.Success, result.ErrorText);
             Assert.True(string.IsNullOrEmpty(result.SessionId));
 
             var updatedTank = await db.Tanks.FindAsync(tankId);
@@ -228,7 +231,8 @@ public class ReservationManagerTests
 
             var session = await db.FuellingSessions.FirstOrDefaultAsync();
             Assert.Null(session);
-            Assert.Contains(string.Format(ErrorMessages.PumpIsBusy, pumpId), result.Error);
+            Assert.Equal(ErrorCatalog.PumpIsBusy.Code, result.ErrorCode);
+            Assert.Contains(ErrorCatalog.PumpIsBusy.Format(pumpId), result.ErrorText);
         }
     }
     
@@ -263,7 +267,7 @@ public class ReservationManagerTests
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
             
-            Assert.False(result.Success, result.Error);
+            Assert.False(result.Success, result.ErrorText);
             Assert.True(string.IsNullOrEmpty(result.SessionId));
 
             var updatedTank = await db.Tanks.FindAsync(tankId);
@@ -271,7 +275,8 @@ public class ReservationManagerTests
 
             var session = await db.FuellingSessions.FirstOrDefaultAsync();
             Assert.Null(session);
-            Assert.Contains(string.Format(ErrorMessages.StationClosedFuellingRejected, stationId, fuelType), result.Error);
+            Assert.Equal(ErrorCatalog.StationClosedForFuelling.Code, result.ErrorCode);
+            Assert.Contains(ErrorCatalog.StationClosedForFuelling.Format(stationId, fuelType), result.ErrorText);
         }
     }
 
@@ -299,7 +304,7 @@ public class ReservationManagerTests
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
             
-            Assert.False(result.Success, result.Error);
+            Assert.False(result.Success, result.ErrorText);
             Assert.True(string.IsNullOrEmpty(result.SessionId));
 
             var updatedTank = await db.Tanks.FindAsync(tankId);
@@ -307,7 +312,7 @@ public class ReservationManagerTests
 
             var session = await db.FuellingSessions.FirstOrDefaultAsync();
             Assert.Null(session);
-            Assert.Contains(string.Format(ErrorMessages.FuelTypeMismatch), result.Error);
+            Assert.Equal(ErrorCatalog.FuelTypeMismatch.Code, result.ErrorCode);
         }
     }
     
@@ -344,12 +349,13 @@ public class ReservationManagerTests
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
             
-            Assert.False(result.Success, result.Error);
+            Assert.False(result.Success, result.ErrorText);
             Assert.True(string.IsNullOrEmpty(result.SessionId));
 
             var session = await db.FuellingSessions.FirstOrDefaultAsync();
             Assert.Null(session);
-            Assert.Contains(string.Format(ErrorMessages.TankNotFound, missingTankId), result.Error);
+            Assert.Equal(ErrorCatalog.TankNotFound.Code, result.ErrorCode);
+            Assert.Contains(ErrorCatalog.TankNotFound.Format(missingTankId), result.ErrorText);
         }
     }
     
@@ -377,7 +383,7 @@ public class ReservationManagerTests
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
             
-            Assert.False(result.Success, result.Error);
+            Assert.False(result.Success, result.ErrorText);
             Assert.True(string.IsNullOrEmpty(result.SessionId));
 
             var updatedTank = await db.Tanks.FindAsync(tankId);
@@ -385,7 +391,7 @@ public class ReservationManagerTests
 
             var session = await db.FuellingSessions.FirstOrDefaultAsync();
             Assert.Null(session);
-            Assert.Contains(string.Format(ErrorMessages.IdempotencyKeyNotProvidedForFuelling), result.Error);
+            Assert.Equal(ErrorCatalog.IdempotencyKeyNotProvidedForFuelling.Code, result.ErrorCode);
         }
     }
     
@@ -577,7 +583,8 @@ public class ReservationManagerTests
             Assert.Null(await db.FuellingSessions.FirstOrDefaultAsync());
             var tank = await db.Tanks.FindAsync(tankId);
             Assert.Equal(100, tank!.CurrentVolume);
-            Assert.Contains(string.Format(ErrorMessages.FuellingSessionNotFound, sessionId), completeResult.Error);
+            Assert.Equal(ErrorCatalog.FuellingSessionNotFound.Code, completeResult.ErrorCode);
+            Assert.Contains(ErrorCatalog.FuellingSessionNotFound.Format(sessionId), completeResult.ErrorText);
         }
     }
     
@@ -616,7 +623,8 @@ public class ReservationManagerTests
             Assert.Null(await db.FuellingSessions.FirstOrDefaultAsync());
             var tank = await db.Tanks.FindAsync(tankId);
             Assert.Equal(100 - volume, tank!.CurrentVolume);
-            Assert.Contains(string.Format(ErrorMessages.PumpNotFound, missingPumpId), completeResult.Error);
+            Assert.Equal(ErrorCatalog.PumpNotFound.Code, completeResult.ErrorCode);
+            Assert.Contains(ErrorCatalog.PumpNotFound.Format(missingPumpId), completeResult.ErrorText);
         }
     }
     
@@ -647,7 +655,8 @@ public class ReservationManagerTests
             Assert.Null(await db.FuellingSessions.FirstOrDefaultAsync());
             var tank = await db.Tanks.FindAsync(tankId);
             Assert.Equal(100, tank!.CurrentVolume);
-            Assert.Contains(string.Format(ErrorMessages.TankNotFound, missingTankId), completeResult.Error);
+            Assert.Equal(ErrorCatalog.TankNotFound.Code, completeResult.ErrorCode);
+            Assert.Contains(ErrorCatalog.TankNotFound.Format(missingTankId), completeResult.ErrorText);
         }
     }
 
@@ -677,7 +686,8 @@ public class ReservationManagerTests
             Assert.Null(await db.FuellingSessions.FirstOrDefaultAsync());
             var tank = await db.Tanks.FindAsync(tankId);
             Assert.Equal(100, tank!.CurrentVolume);
-            Assert.Contains(string.Format(ErrorMessages.SessionAlreadyCompleted, sessionId), completeResult.Error);
+            Assert.Equal(ErrorCatalog.SessionAlreadyCompleted.Code, completeResult.ErrorCode);
+            Assert.Contains(ErrorCatalog.SessionAlreadyCompleted.Format(sessionId), completeResult.ErrorText);
         }
     }
     
@@ -721,7 +731,8 @@ public class ReservationManagerTests
             Assert.Null(await db.FuellingSessions.FirstOrDefaultAsync());
             var tank = await db.Tanks.FindAsync(tankId);
             Assert.Equal(100 - volume, tank!.CurrentVolume);
-            Assert.Contains(string.Format(ErrorMessages.TankIsBusy, tankId), completeResult.Error);
+            Assert.Equal(ErrorCatalog.TankIsBusy.Code, completeResult.ErrorCode);
+            Assert.Contains(ErrorCatalog.TankIsBusy.Format(tankId), completeResult.ErrorText);
         }
     }
 

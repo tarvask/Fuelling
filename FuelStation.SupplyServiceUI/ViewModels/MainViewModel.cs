@@ -69,7 +69,7 @@ public partial class MainViewModel : ViewModelBase
 
         if (startReply == null || startReply.Success == false)
         {
-            station.Status = $"Error: {startReply?.Error ?? DeliveryStatuses.NoServerAnswer}";
+            station.Status = $"Error: {startReply?.ErrorText ?? DeliveryStatuses.NoServerAnswer}";
         }
     }
     

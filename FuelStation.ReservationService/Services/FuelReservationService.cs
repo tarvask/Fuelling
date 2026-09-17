@@ -28,7 +28,9 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
             Success = result.Success,
             SessionId = result.SessionId ?? string.Empty,
             ReservedLitres = result.ReservedLitres,
-            Error = result.Error ?? string.Empty
+            ErrorNumericCode = result.ErrorNumericCode ?? 0,
+            ErrorCode = result.ErrorCode ?? string.Empty,
+            ErrorText = result.ErrorText ?? string.Empty
         };
     }
 
@@ -39,7 +41,13 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
         if (result.Success)
             _ = _kafka.SendFuellingCompletedEvent(request.StationId, request.SessionId, request.FuelType.ToString(), request.ActualLitres);
 
-        return new CompleteFuellingResponse { Success = result.Success, Error = result.Error ?? "" };
+        return new CompleteFuellingResponse
+        {
+            Success = result.Success,
+            ErrorNumericCode = result.ErrorNumericCode ?? 0,
+            ErrorCode = result.ErrorCode ?? string.Empty,
+            ErrorText = result.ErrorText ?? string.Empty
+        };
     }
 
     public override async Task<StartDeliveryResponse> StartDelivery(StartDeliveryRequest request, ServerCallContext context)
@@ -50,7 +58,9 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
         {
             Success = result.Success,
             SessionId = result.SessionId,
-            Error = result.Error ?? string.Empty
+            ErrorNumericCode = result.ErrorNumericCode ?? 0,
+            ErrorCode = result.ErrorCode ?? string.Empty,
+            ErrorText = result.ErrorText ?? string.Empty
         };
     }
 

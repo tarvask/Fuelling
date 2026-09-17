@@ -38,7 +38,7 @@ public class DeliveryOrchestrator : BackgroundService
     public async Task<StartDeliveryResult> StartDeliveryProcessAsync(string stationId, List<Compartment> compartments, string idempotencyKey)
     {
         if (string.IsNullOrEmpty(idempotencyKey))
-            return StartDeliveryResult.Fail(ErrorMessages.IdempotencyKeyNotProvidedForDelivering);
+            return StartDeliveryResult.Fail(ErrorCatalog.IdempotencyKeyNotProvidedForDelivering);
         
         var cachedOperationResult = await _idempotencyProvider.GetIdempotencyResultAsync<StartDeliveryResult>(idempotencyKey);
         if (cachedOperationResult != null)
@@ -48,7 +48,7 @@ public class DeliveryOrchestrator : BackgroundService
         if (keyAcquired == false)
         {
             cachedOperationResult = await _idempotencyProvider.WaitForIdempotentResultAsync<StartDeliveryResult>(idempotencyKey);
-            return cachedOperationResult ?? StartDeliveryResult.Fail(ErrorMessages.IdempotencyConflict);
+            return cachedOperationResult ?? StartDeliveryResult.Fail(ErrorCatalog.IdempotencyConflict);
         }
         
         using var scope = _scopeFactory.CreateScope();
@@ -56,7 +56,7 @@ public class DeliveryOrchestrator : BackgroundService
         
         var stationExists = await db.Stations.AnyAsync(s => s.Id == stationId);
         if (stationExists == false)
-            return StartDeliveryResult.Fail(string.Format(ErrorMessages.StationNotFound, stationId)); 
+            return StartDeliveryResult.Fail(ErrorCatalog.StationNotFound, stationId); 
         
         var session = new DeliverySessionEntity
         {
@@ -92,7 +92,7 @@ public class DeliveryOrchestrator : BackgroundService
             _logger.LogInformation(">>> ExecuteDeliveryProcess STARTED for session {0}", sessionId);
             var sessionEntity = await db.DeliverySessions.FirstOrDefaultAsync(s => s.Id == sessionId);
             if (sessionEntity == null)
-                throw new InvalidOperationException(string.Format(ErrorMessages.DeliverySessionNotFound, sessionId));
+                throw new InvalidOperationException(ErrorCatalog.DeliverySessionNotFound.Format(sessionId));
             
             sessionEntity.Status = DeliverySessionStatus.Scheduled;
             await db.SaveChangesAsync();
@@ -105,7 +105,7 @@ public class DeliveryOrchestrator : BackgroundService
             stationLock = await _lockProvider.TryAcquireLockAsync(
                 LockConstants.StationLockKey(stationId), TimeSpan.FromSeconds(LockConstants.StationLockExpireTime));
             if (stationLock == null)
-                throw new InvalidOperationException(string.Format(ErrorMessages.StationClosedDeliveryRejected, stationId));
+                throw new InvalidOperationException(ErrorCatalog.StationClosedForDelivery.Format(stationId));
 
             lockAcquired = true;
             sessionEntity.Status = DeliverySessionStatus.Arrived;
@@ -173,7 +173,7 @@ public class DeliveryOrchestrator : BackgroundService
             LockConstants.TankLockExpireTime, _simulationConfig.MaxTankFillRetriesCount, _simulationConfig.TankFillRetryDelayMs);
 
         if (tankLock == null)
-            throw new InvalidOperationException( string.Format(ErrorMessages.TankIsBusy, tank.Id));
+            throw new InvalidOperationException( ErrorCatalog.TankIsBusy.Format(tank.Id));
 
         try
         {

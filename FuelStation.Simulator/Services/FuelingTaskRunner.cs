@@ -71,7 +71,7 @@ public class FuelingTaskRunner
 
         if (startReply == null || startReply.Success == false)
         {
-            Console.WriteLine($"[{DateTime.Now:T}] Start failed: {startReply?.Error ?? "No server answer"}");
+            Console.WriteLine($"[{DateTime.Now:T}] Start failed: {startReply?.ErrorText ?? "No server answer"}");
             return;
         }
 
@@ -92,13 +92,13 @@ public class FuelingTaskRunner
 
         if (completeReply == null || completeReply.Success == false)
         {
-            Console.WriteLine($"[{DateTime.Now:T}] Complete of session {startReply.SessionId} failed: {completeReply?.Error ?? "No server answer"}");
+            Console.WriteLine($"[{DateTime.Now:T}] Complete of session {startReply.SessionId} failed: {completeReply?.ErrorText ?? "No server answer"}");
             return;
         }
 
         Console.WriteLine(completeReply.Success
             ? $"[{DateTime.Now:T}] Session {startReply.SessionId} ended: actual {startReply.ReservedLitres}L, success={completeReply.Success}"
-            : $"[{DateTime.Now:T}] Session {startReply.SessionId} ended: actual {startReply.ReservedLitres}L, success={completeReply.Success}, error={completeReply.Error}");
+            : $"[{DateTime.Now:T}] Session {startReply.SessionId} ended: actual {startReply.ReservedLitres}L, success={completeReply.Success}, error={completeReply.ErrorText}");
     }
 
     // timing helper functions

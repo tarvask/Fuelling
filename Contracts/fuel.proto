@@ -27,10 +27,12 @@ message StartFuellingRequest {
 }
 
 message StartFuellingResponse {
-  bool   success         = 1;
-  string session_id      = 2;
-  double reserved_litres = 3;
-  string error           = 4;
+  bool success             = 1;
+  string session_id        = 2;
+  double reserved_litres   = 3;
+  string error_code        = 4;
+  string error_text        = 5;
+  int32 error_numeric_code = 6;
 }
 
 message CompleteFuellingRequest {
@@ -41,8 +43,10 @@ message CompleteFuellingRequest {
 }
 
 message CompleteFuellingResponse {
-  bool   success = 1;
-  string error   = 2;
+  bool success             = 1;
+  string error_code        = 2;
+  string error_text        = 3;
+  int32 error_numeric_code = 4;
 }
 
 message StartDeliveryRequest {
@@ -52,9 +56,11 @@ message StartDeliveryRequest {
 }
 
 message StartDeliveryResponse {
-  bool success = 1;
-  string session_id = 2;
-  string error = 3;
+  bool success             = 1;
+  string session_id        = 2;
+  string error_code        = 3;
+  string error_text        = 4;
+  int32 error_numeric_code = 5;
 }
 
 message Compartment {

@@ -1,6 +1,7 @@
 using Fuel;
 using FuelStation.ReservationService.Constants;
 using FuelStation.ReservationService.Infrastructure;
+using FuelStation.ReservationService.Models;
 using FuelStation.ReservationService.Persistence;
 using FuelStation.ReservationService.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -117,7 +118,8 @@ public class FuellingLoadTest : IntegrationTestBase
         Assert.True(responses[0].Success);
         Assert.True(responses[1].Success);
         Assert.False(task3Result.Success);
-        Assert.Contains(string.Format(ErrorMessages.PumpIsBusy, Pump2Id), task3Result.Error);
+        Assert.Equal(ErrorCatalog.PumpIsBusy.Code, task3Result.ErrorCode);
+        Assert.Contains(ErrorCatalog.PumpIsBusy.Format(Pump2Id), task3Result.ErrorText);
     }
     
     [Fact]
@@ -166,7 +168,8 @@ public class FuellingLoadTest : IntegrationTestBase
         Assert.True(responses[0].Success);
         Assert.True(responses[1].Success);
         Assert.False(task3Result.Success);
-        Assert.Contains(string.Format(ErrorMessages.PumpNotAutoSelected, FuelType), task3Result.Error);
+        Assert.Equal(ErrorCatalog.PumpNotAutoSelected.Code, task3Result.ErrorCode);
+        Assert.Contains(ErrorCatalog.PumpNotAutoSelected.Format(FuelType), task3Result.ErrorText);
     }
     
     [Fact]
@@ -196,7 +199,8 @@ public class FuellingLoadTest : IntegrationTestBase
 
         //# Assert
         Assert.False(startFuellingResponse.Success);
-        Assert.Contains(string.Format(ErrorMessages.TankIsBusy, TankId), startFuellingResponse.Error);
+        Assert.Equal(ErrorCatalog.TankIsBusy.Code, startFuellingResponse.ErrorCode);
+        Assert.Contains(ErrorCatalog.TankIsBusy.Format(TankId), startFuellingResponse.ErrorText);
     }
     
     private async Task SeedTestStationWithManyPumpsAsync(int pumpsCount)
