@@ -26,14 +26,14 @@ public record StartFuellingResult
         ErrorText = errorText;
     }
     
-    public static StartFuellingResult Fail(ErrorInfo error, params object[] args) =>
+    public static StartFuellingResult Fail(string stationId, ErrorInfo error, params object[] args) =>
         new()
         {
             Success = false,
             
             ErrorNumericCode = error.NumericCode,
             ErrorCode = error.Code,
-            ErrorText = error.Format(args)
+            ErrorText = $"[Station {stationId}] {error.Format(args)}"
         };
 
     public static StartFuellingResult Ok(string sessionId, double reservedLitres) =>
@@ -47,14 +47,14 @@ public record CompleteFuellingResult
     public string? ErrorCode { get; init; }
     public string? ErrorText { get; init; }
 
-    public static CompleteFuellingResult Fail(ErrorInfo error, params object[] args) =>
+    public static CompleteFuellingResult Fail(string stationId, ErrorInfo error, params object[] args) =>
         new()
         {
             Success = false,
             
             ErrorNumericCode = error.NumericCode,
             ErrorCode = error.Code,
-            ErrorText = error.Format(args)
+            ErrorText = $"[Station {stationId}] {error.Format(args)}"
         };
 
     public static CompleteFuellingResult Ok() =>
@@ -83,14 +83,14 @@ public record StartDeliveryResult
         ErrorText = errorText;
     }
 
-    public static StartDeliveryResult Fail(ErrorInfo error, params object[] args) =>
+    public static StartDeliveryResult Fail(string stationId, ErrorInfo error, params object[] args) =>
         new()
         {
             Success = false,
             
             ErrorNumericCode = error.NumericCode,
             ErrorCode = error.Code,
-            ErrorText = error.Format(args)
+            ErrorText = $"[Station {stationId}] {error.Format(args)}"
         };
 
     public static StartDeliveryResult Ok(string sessionId) =>

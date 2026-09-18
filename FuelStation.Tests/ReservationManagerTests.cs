@@ -276,7 +276,7 @@ public class ReservationManagerTests
             var session = await db.FuellingSessions.FirstOrDefaultAsync();
             Assert.Null(session);
             Assert.Equal(ErrorCatalog.StationClosedForFuelling.Code, result.ErrorCode);
-            Assert.Contains(ErrorCatalog.StationClosedForFuelling.Format(stationId, fuelType), result.ErrorText);
+            Assert.Contains($"{fuelType}", result.ErrorText);
         }
     }
 

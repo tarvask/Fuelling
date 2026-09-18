@@ -38,7 +38,7 @@ public class DeliveryOrchestrator : BackgroundService
     public async Task<StartDeliveryResult> StartDeliveryProcessAsync(string stationId, List<Compartment> compartments, string idempotencyKey)
     {
         if (string.IsNullOrEmpty(idempotencyKey))
-            return StartDeliveryResult.Fail(ErrorCatalog.IdempotencyKeyNotProvidedForDelivering);
+            return StartDeliveryResult.Fail(stationId, ErrorCatalog.IdempotencyKeyNotProvidedForDelivering);
         
         var cachedOperationResult = await _idempotencyProvider.GetIdempotencyResultAsync<StartDeliveryResult>(idempotencyKey);
         if (cachedOperationResult != null)
@@ -48,7 +48,7 @@ public class DeliveryOrchestrator : BackgroundService
         if (keyAcquired == false)
         {
             cachedOperationResult = await _idempotencyProvider.WaitForIdempotentResultAsync<StartDeliveryResult>(idempotencyKey);
-            return cachedOperationResult ?? StartDeliveryResult.Fail(ErrorCatalog.IdempotencyConflict);
+            return cachedOperationResult ?? StartDeliveryResult.Fail(stationId, ErrorCatalog.IdempotencyConflict);
         }
         
         using var scope = _scopeFactory.CreateScope();
@@ -56,7 +56,7 @@ public class DeliveryOrchestrator : BackgroundService
         
         var stationExists = await db.Stations.AnyAsync(s => s.Id == stationId);
         if (stationExists == false)
-            return StartDeliveryResult.Fail(ErrorCatalog.StationNotFound, stationId); 
+            return StartDeliveryResult.Fail(stationId, ErrorCatalog.StationNotFound); 
         
         var session = new DeliverySessionEntity
         {
@@ -92,7 +92,7 @@ public class DeliveryOrchestrator : BackgroundService
             _logger.LogInformation(">>> ExecuteDeliveryProcess STARTED for session {0}", sessionId);
             var sessionEntity = await db.DeliverySessions.FirstOrDefaultAsync(s => s.Id == sessionId);
             if (sessionEntity == null)
-                throw new InvalidOperationException(ErrorCatalog.DeliverySessionNotFound.Format(sessionId));
+                throw new InvalidOperationException($"[Station {stationId}] {ErrorCatalog.DeliverySessionNotFound.Format(sessionId)}");
             
             sessionEntity.Status = DeliverySessionStatus.Scheduled;
             await db.SaveChangesAsync();
@@ -105,7 +105,7 @@ public class DeliveryOrchestrator : BackgroundService
             stationLock = await _lockProvider.TryAcquireLockAsync(
                 LockConstants.StationLockKey(stationId), TimeSpan.FromSeconds(LockConstants.StationLockExpireTime));
             if (stationLock == null)
-                throw new InvalidOperationException(ErrorCatalog.StationClosedForDelivery.Format(stationId));
+                throw new InvalidOperationException($"[Station {stationId}] {ErrorCatalog.StationClosedForDelivery.Format()}");
 
             lockAcquired = true;
             sessionEntity.Status = DeliverySessionStatus.Arrived;
@@ -162,18 +162,18 @@ public class DeliveryOrchestrator : BackgroundService
 
             foreach (var tank in tanks)
             {
-                await UpdateTankVolumeAsync(db, tank, fuelToAddForSingleTank);
+                await UpdateTankVolumeAsync(db, stationId, tank, compartment.FuelType, fuelToAddForSingleTank);
             }
         }
     }
 
-    private async Task UpdateTankVolumeAsync(AppDbContext db, TankEntity tank, decimal fuelToAdd)
+    private async Task UpdateTankVolumeAsync(AppDbContext db, string stationId, TankEntity tank, FuelType fuelType, decimal fuelToAdd)
     {
         RedisLockToken? tankLock = await _lockProvider.TryAcquireLockWithRetryAsync(LockConstants.TankLockKey(tank.Id),
             LockConstants.TankLockExpireTime, _simulationConfig.MaxTankFillRetriesCount, _simulationConfig.TankFillRetryDelayMs);
 
         if (tankLock == null)
-            throw new InvalidOperationException( ErrorCatalog.TankIsBusy.Format(tank.Id));
+            throw new InvalidOperationException( $"[Station {stationId}] {ErrorCatalog.TankIsBusy.Format(tank.Id)}");
 
         try
         {

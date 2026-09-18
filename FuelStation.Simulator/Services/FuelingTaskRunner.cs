@@ -102,18 +102,18 @@ public class FuelingTaskRunner
     }
 
     // timing helper functions
-    int GetTotalFuelingProcessDurationMs(double litres)
+    private int GetTotalFuelingProcessDurationMs(double litres)
     {
         return GetFuelingDurationFromVolumeMs(litres) + GetHumanFactorDurationMs();
     }
 
-    int GetHumanFactorDurationMs()
+    private int GetHumanFactorDurationMs()
     {
         int virtualMinutes = Random.Shared.Next(_simulationConfig.MinHumanFactorMinutes, _simulationConfig.MaxHumanFactorMinutes + 1);
         return virtualMinutes * 60 * 1000 / _simulationConfigProvider.SpeedFactor;
     }
 
-    int GetFuelingDurationFromVolumeMs(double litres)
+    private int GetFuelingDurationFromVolumeMs(double litres)
     {
         double pumpSpeed = _simulationConfig.PumpSpeedLitresPerMinute;
         int virtualMinutes = (int)Math.Ceiling(litres / pumpSpeed);

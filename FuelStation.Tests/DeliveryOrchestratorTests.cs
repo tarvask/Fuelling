@@ -35,7 +35,13 @@ public class DeliveryOrchestratorTests
         var compartments = new List<Compartment> { new() { FuelType = FuelType.Ai95, Litres = 1000 } };
         
         //# Act
+        var scheduledEventReceived = new TaskCompletionSource();
+        var scheduledStatus = DeliverySessionStatus.Scheduled.ToString();
+        kafka.When(x => x.SendDeliveryEvent(stationId, Arg.Any<string>(), scheduledStatus))
+            .Do(_ => scheduledEventReceived.TrySetResult());
+
         var result = await orchestrator.StartDeliveryProcessAsync(stationId, compartments, Guid.NewGuid().ToString());
+        await scheduledEventReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         //# Assert
         Assert.True(result.Success);
@@ -46,7 +52,7 @@ public class DeliveryOrchestratorTests
             Assert.NotNull(session);
             Assert.Equal(DeliverySessionStatus.Scheduled, session.Status);
         }
-        await kafka.Received(1).SendDeliveryEvent(stationId, result.SessionId!, DeliverySessionStatus.Scheduled.ToString());
+        await kafka.Received(1).SendDeliveryEvent(stationId, result.SessionId!, scheduledStatus);
     }
 
     [Fact]
@@ -159,7 +165,7 @@ public class DeliveryOrchestratorTests
         //# Assert
         Assert.False(result.Success);
         Assert.Equal(ErrorCatalog.StationNotFound.Code, result.ErrorCode);
-        Assert.Contains(ErrorCatalog.StationNotFound.Format(wrongStationId), result.ErrorText);
+        Assert.Contains(wrongStationId, result.ErrorText);
         using (var assertScope = scopeFactory.CreateScope())
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();

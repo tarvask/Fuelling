@@ -5,16 +5,16 @@ public static class ErrorCatalog
     // 1000–1999 Station
     public static readonly ErrorInfo StationClosedForFuelling = new(
         1001, "StationClosedForFuelling",
-        "Station {0} closed, delivery is in process. Fuelling rejected, desired fuel: {1}");
+        "Station closed, delivery is in process. Fuelling rejected, desired fuel: {0}");
 
     public static readonly ErrorInfo StationClosedForDelivery = new(
         1002, "StationClosedForDelivery",
-        "Station {0} closed, delivery is in process. Another delivery is impossible");
+        "Station closed, delivery is in process. Another delivery is impossible");
 
     public static readonly ErrorInfo StationNotFound = new(
         1003, "StationNotFound",
-        "Station {0} not found");
-    
+        "Station not found");
+
     // 2000–2999 Pump
     public static readonly ErrorInfo PumpNotAutoSelected = new(
         2001, "PumpNotAutoSelected",
@@ -27,7 +27,7 @@ public static class ErrorCatalog
     public static readonly ErrorInfo PumpIsBusy = new(
         2003, "PumpIsBusy",
         "Pump {0} is busy");
-    
+
     // 3000–3999 Tank / Fuel
     public static readonly ErrorInfo TankIsBusy = new(
         3001, "TankIsBusy",
@@ -44,7 +44,7 @@ public static class ErrorCatalog
     public static readonly ErrorInfo FuelTypeMismatch = new(
         3004, "FuelTypeMismatch",
         "Fuel type mismatch");
-    
+
     // 4000–4999 Session
     public static readonly ErrorInfo FuellingSessionNotFound = new(
         4001, "FuellingSessionNotFound",
@@ -57,7 +57,7 @@ public static class ErrorCatalog
     public static readonly ErrorInfo SessionAlreadyCompleted = new(
         4003, "SessionAlreadyCompleted",
         "Fuelling session {0} is already completed");
-    
+
     // 5000–5999 Idempotency
     public static readonly ErrorInfo IdempotencyKeyNotProvidedForFuelling = new(
         5001, "IdempotencyKeyNotProvidedForFuelling",
