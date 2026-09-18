@@ -1,4 +1,5 @@
 using Fuel;
+using FuelStation.ReservationService.Metrics;
 using FuelStation.ReservationService.Models;
 using FuelStation.ReservationService.Persistence;
 using FuelStation.ReservationService.Persistence.Entities;
@@ -60,5 +61,15 @@ public class DbInitializerService
         }
 
         await db.SaveChangesAsync();
+
+        InitMetrics(db);
+    }
+
+    private static void InitMetrics(AppDbContext db)
+    {
+        foreach (var tankEntity in db.Tanks)
+        {
+            FuelStationMetrics.UpdateTankVolumeMetric(tankEntity);
+        }
     }
 }

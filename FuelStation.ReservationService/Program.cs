@@ -12,9 +12,10 @@ using OpenTelemetry;
 using OpenTelemetry.Context.Propagation;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using Prometheus;
 using StackExchange.Redis;
 
-const int http1Port = 5000;
+const int http1Port = 5002;
 const int http2Port = 5001;
 const int grpcOtlpPort = 4317;
 
@@ -55,7 +56,7 @@ builder.WebHost.ConfigureKestrel(options =>
     // gRPC port (only HTTP/2)
     options.ListenAnyIP(http2Port, listenOptions => { listenOptions.Protocols = HttpProtocols.Http2; });
 
-    // Healthcheck + REST port (only HTTP/1.1)
+    // Healthcheck + REST port (only HTTP/1.1) + Prometheus
     options.ListenAnyIP(http1Port, listenOptions => { listenOptions.Protocols = HttpProtocols.Http1; });
 });
 
@@ -111,6 +112,11 @@ using (var adminClient = new AdminClientBuilder(adminConfig).Build())
     if (toCreate.Any())
         await adminClient.CreateTopicsAsync(toCreate);
 }
+
+// collects HTTP metrics for each request
+app.UseHttpMetrics();
+// exposes /metrics endpoint
+app.MapMetrics();
 
 app.MapGrpcService<FuelReservationService>();
 app.MapGet("/", () => "ReservationService is running");

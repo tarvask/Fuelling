@@ -6,6 +6,7 @@ using FuelStation.ReservationService.Infrastructure;
 using FuelStation.ReservationService.Models;
 using FuelStation.ReservationService.Persistence;
 using FuelStation.ReservationService.Persistence.Entities;
+using FuelStation.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -74,7 +75,7 @@ public class DeliveryOrchestrator : BackgroundService
         await db.SaveChangesAsync();
         var deliveryTask = Task.Run(() => ExecuteDeliveryProcess(session.Id, stationId, compartments));
         _activeDeliveries.TryAdd(session.Id, deliveryTask);
-        _logger.LogInformation("Delivery {SessionId} for station {StationId} started in background", session.Id, stationId);
+        _logger.LogInformation("[Station {StationId}] Delivery {SessionId} started in background", stationId, session.Id);
         var okResult = StartDeliveryResult.Ok(session.Id);
         await _idempotencyProvider.SetIdempotencyResultAsync(idempotencyKey, JsonSerializer.Serialize(okResult));
         return okResult;
@@ -89,14 +90,14 @@ public class DeliveryOrchestrator : BackgroundService
         
         try
         {
-            _logger.LogInformation(">>> ExecuteDeliveryProcess STARTED for session {0}", sessionId);
+            _logger.LogInformation("[Station {StationId}] >>> ExecuteDeliveryProcess STARTED for session {SessionId}", stationId, sessionId);
             var sessionEntity = await db.DeliverySessions.FirstOrDefaultAsync(s => s.Id == sessionId);
             if (sessionEntity == null)
-                throw new InvalidOperationException($"[Station {stationId}] {ErrorCatalog.DeliverySessionNotFound.Format(sessionId)}");
+                throw new DeliveryException(ErrorCatalog.DeliverySessionNotFound, sessionId);
             
             sessionEntity.Status = DeliverySessionStatus.Scheduled;
             await db.SaveChangesAsync();
-            await _kafka.SendDeliveryEvent(stationId, sessionId, DeliverySessionStatus.Scheduled.ToString());
+            await _kafka.SendDeliveryEvent(stationId, sessionId, $"{DeliverySessionStatus.Scheduled}");
             
             // delivery
             await Task.Delay(GetDeliveryTime());
@@ -105,12 +106,12 @@ public class DeliveryOrchestrator : BackgroundService
             stationLock = await _lockProvider.TryAcquireLockAsync(
                 LockConstants.StationLockKey(stationId), TimeSpan.FromSeconds(LockConstants.StationLockExpireTime));
             if (stationLock == null)
-                throw new InvalidOperationException($"[Station {stationId}] {ErrorCatalog.StationClosedForDelivery.Format()}");
+                throw new DeliveryException(ErrorCatalog.StationClosedForDelivery);
 
             lockAcquired = true;
             sessionEntity.Status = DeliverySessionStatus.Arrived;
             await db.SaveChangesAsync();
-            await _kafka.SendDeliveryEvent(stationId, sessionId, DeliverySessionStatus.Arrived.ToString());
+            await _kafka.SendDeliveryEvent(stationId, sessionId, $"{DeliverySessionStatus.Arrived}");
 
             // unloading
             await Task.Delay(GetUnloadTime());
@@ -119,11 +120,16 @@ public class DeliveryOrchestrator : BackgroundService
             // completed
             sessionEntity.Status = DeliverySessionStatus.Completed;
             await db.SaveChangesAsync();
-            await _kafka.SendDeliveryEvent(stationId, sessionId, DeliverySessionStatus.Completed.ToString());
+            await _kafka.SendDeliveryEvent(stationId, sessionId, $"{DeliverySessionStatus.Completed}");
+            Metrics.FuelStationMetrics.DeliveryCompleted.Inc();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Delivery {SessionId} failed unexpectedly", sessionId);
+            Metrics.FuelStationMetrics.Errors.WithLabels(
+                stationId,
+                OpenTelemetryConstants.Operations.CompleteDelivery,
+                (ex as DeliveryException)?.Error.Code ?? ErrorCatalog.Unknown.Code).Inc();
             
             // try save session as Failed
             try
@@ -135,7 +141,7 @@ public class DeliveryOrchestrator : BackgroundService
                     await db.SaveChangesAsync();
                 }
 
-                await _kafka.SendDeliveryEvent(stationId, sessionId, DeliverySessionStatus.Failed.ToString());
+                await _kafka.SendDeliveryEvent(stationId, sessionId, $"{DeliverySessionStatus.Failed}");
             }
             catch (Exception exInner)
             {
@@ -173,7 +179,7 @@ public class DeliveryOrchestrator : BackgroundService
             LockConstants.TankLockExpireTime, _simulationConfig.MaxTankFillRetriesCount, _simulationConfig.TankFillRetryDelayMs);
 
         if (tankLock == null)
-            throw new InvalidOperationException( $"[Station {stationId}] {ErrorCatalog.TankIsBusy.Format(tank.Id)}");
+            throw new DeliveryException(ErrorCatalog.TankIsBusy, tank.Id);
 
         try
         {
@@ -183,6 +189,7 @@ public class DeliveryOrchestrator : BackgroundService
             var fuelToAddClamped = Math.Min(fuelToAdd, freeSpace);
             tank.CurrentVolume += fuelToAddClamped;
             await _lockProvider.SetTankVolumeAsync(tank.Id, tank.CurrentVolume);
+            Metrics.FuelStationMetrics.TankVolume.WithLabels(stationId, tank.Id, $"{fuelType}").Set((double)tank.CurrentVolume);
         }
         finally
         {

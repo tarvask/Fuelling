@@ -70,4 +70,9 @@ public static class ErrorCatalog
     public static readonly ErrorInfo IdempotencyConflict = new(
         5003, "IdempotencyConflict",
         "Idempotency conflict");
+    
+    // extra
+    public static readonly ErrorInfo Unknown = new(
+        9999, "Unknown",
+        "Unknown error");
 }

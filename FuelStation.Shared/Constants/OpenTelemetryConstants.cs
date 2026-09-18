@@ -24,4 +24,12 @@ public static class OpenTelemetryConstants
         public const string FuelType = "fuel.type";
         public const string FuelLitres = "fuel.litres";
     }
+
+    public static class Operations
+    {
+        public const string StartFuelling = "StartFuelling";
+        public const string CompleteFuelling = "CompleteFuelling";
+        public const string StartDelivery = "StartDelivery";
+        public const string CompleteDelivery = "CompleteDelivery";
+    }
 }

@@ -1,4 +1,6 @@
 using Fuel;
+using FuelStation.ReservationService.Models;
+using FuelStation.Shared.Constants;
 using Grpc.Core;
 
 namespace FuelStation.ReservationService.Services;
@@ -21,7 +23,18 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
         var result = await _reservationManager.StartFuellingAsync(request.StationId, request.PumpId, request.FuelType, request.PreauthorizedLitres, request.IdempotencyKey);
 
         if (result.Success)
-            _ = _kafka.SendFuellingStartedEvent(request.StationId, result.SessionId!, request.PumpId, request.FuelType.ToString(), result.ReservedLitres);
+        {
+            _ = _kafka.SendFuellingStartedEvent(request.StationId, result.SessionId!, request.PumpId,
+                request.FuelType.ToString(), result.ReservedLitres);
+            Metrics.FuelStationMetrics.FuellingStarted.Inc();
+        }
+        else
+        {
+            Metrics.FuelStationMetrics.Errors.WithLabels(
+                request.StationId,
+                OpenTelemetryConstants.Operations.StartFuelling,
+                result.ErrorCode ?? ErrorCatalog.Unknown.Code).Inc();
+        }
 
         return new StartFuellingResponse
         {
@@ -39,7 +52,18 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
         var result = await _reservationManager.CompleteFuellingAsync(request.StationId, request.SessionId, request.ActualLitres);
 
         if (result.Success)
-            _ = _kafka.SendFuellingCompletedEvent(request.StationId, request.SessionId, request.FuelType.ToString(), request.ActualLitres);
+        {
+            _ = _kafka.SendFuellingCompletedEvent(request.StationId, request.SessionId, request.FuelType.ToString(),
+                request.ActualLitres);
+            Metrics.FuelStationMetrics.FuellingCompleted.Inc();
+        }
+        else
+        {
+            Metrics.FuelStationMetrics.Errors.WithLabels(
+                request.StationId,
+                OpenTelemetryConstants.Operations.CompleteFuelling,
+                result.ErrorCode ?? ErrorCatalog.Unknown.Code).Inc();
+        }
 
         return new CompleteFuellingResponse
         {
@@ -53,6 +77,18 @@ public class FuelReservationService : FuelReservation.FuelReservationBase
     public override async Task<StartDeliveryResponse> StartDelivery(StartDeliveryRequest request, ServerCallContext context)
     {
         var result = await _deliveryOrchestrator.StartDeliveryProcessAsync(request.StationId, request.Compartments.ToList(), request.IdempotencyKey);
+
+        if (result.Success)
+        {
+            Metrics.FuelStationMetrics.DeliveryStarted.Inc();
+        }
+        else
+        {
+            Metrics.FuelStationMetrics.Errors.WithLabels(
+                request.StationId,
+                OpenTelemetryConstants.Operations.StartDelivery,
+                result.ErrorCode ?? ErrorCatalog.Unknown.Code).Inc();
+        }
 
         return new StartDeliveryResponse
         {

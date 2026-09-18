@@ -85,7 +85,7 @@ services:
     container_name: fuelstation-reservation
     ports:
       - "5001:5001"   # gRPC
-      #- "5000:5000"   # Healthcheck, no forwarding
+      - "5002:5002"   # Healthcheck, metrics
     environment:
       <<: *common-vars
       ASPNETCORE_ENVIRONMENT: "Development"
@@ -103,7 +103,7 @@ services:
     networks:
       - default
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5000/"]
+      test: ["CMD-SHELL", "curl -f http://localhost:5002/"]
       interval: 10s
       timeout: 5s
       retries: 5

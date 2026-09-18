@@ -3,6 +3,7 @@ using System.Text.Json;
 using Fuel;
 using FuelStation.ReservationService.Constants;
 using FuelStation.ReservationService.Infrastructure;
+using FuelStation.ReservationService.Metrics;
 using FuelStation.ReservationService.Models;
 using FuelStation.ReservationService.Persistence;
 using FuelStation.ReservationService.Persistence.Entities;
@@ -112,6 +113,7 @@ public class ReservationManager
             db.FuellingSessions.Remove(session);
             await db.SaveChangesAsync();
             await _lockProvider.SetTankVolumeAsync(tank.Id, tank.CurrentVolume);
+            FuelStationMetrics.TankVolume.WithLabels(stationId, tank.Id, $"{session.FuelType}").Set((double)tank.CurrentVolume);
             
             return CompleteFuellingResult.Ok();
         }
@@ -239,6 +241,7 @@ public class ReservationManager
 
                 await db.SaveChangesAsync();
                 await _lockProvider.SetTankVolumeAsync(tank.Id, tank.CurrentVolume);
+                FuelStationMetrics.TankVolume.WithLabels(stationId, tank.Id, $"{session.FuelType}").Set((double)tank.CurrentVolume);
 
                 _pumpLocks[session.Id] = pumpLock;
                 
