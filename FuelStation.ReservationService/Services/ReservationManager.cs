@@ -124,6 +124,8 @@ public class ReservationManager
             await db.SaveChangesAsync();
             await _lockProvider.SetTankVolumeAsync(tank.Id, tank.CurrentVolume);
             FuelStationMetrics.TankVolume.WithLabels(stationId, tank.Id, $"{session.FuelType}").Set((double)tank.CurrentVolume);
+            var duration = (session.FinishedAt.Value - session.StartedAt).TotalSeconds;
+            FuelStationMetrics.FuellingDuration.Observe(duration);
             
             return CompleteFuellingResult.Ok();
         }

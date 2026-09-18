@@ -29,6 +29,22 @@ public static class FuelStationMetrics
             LabelNames = new[] { "station_id", "tank_id", "fuel_type" }
         });
     
+    public static readonly Histogram FuellingDuration = Prometheus.Metrics
+        .CreateHistogram("fuelstation_fuelling_duration_seconds",
+            "Duration of a fuelling session.",
+            new HistogramConfiguration
+            {
+                Buckets = new[] { 0.5, 1, 2, 5, 10, 30, 60 }
+            });
+    
+    public static readonly Histogram DeliveryDuration = Prometheus.Metrics
+        .CreateHistogram("fuelstation_delivery_duration_seconds",
+            "Duration of a delivery session.",
+            new HistogramConfiguration
+            {
+                Buckets = new[] { 0.5, 1, 2, 5, 10, 30, 60 }
+            });
+    
     public static void UpdateTankVolumeMetric(TankEntity tank)
     {
         TankVolume

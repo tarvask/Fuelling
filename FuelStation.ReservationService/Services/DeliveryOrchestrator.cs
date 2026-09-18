@@ -3,6 +3,7 @@ using System.Text.Json;
 using Fuel;
 using FuelStation.ReservationService.Constants;
 using FuelStation.ReservationService.Infrastructure;
+using FuelStation.ReservationService.Metrics;
 using FuelStation.ReservationService.Models;
 using FuelStation.ReservationService.Persistence;
 using FuelStation.ReservationService.Persistence.Entities;
@@ -123,12 +124,14 @@ public class DeliveryOrchestrator : BackgroundService
             sessionEntity.FinishedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
             await _kafka.SendDeliveryEvent(stationId, sessionId, $"{DeliverySessionStatus.Completed}");
-            Metrics.FuelStationMetrics.DeliveryCompleted.Inc();
+            FuelStationMetrics.DeliveryCompleted.Inc();
+            var duration = (sessionEntity.FinishedAt.Value - sessionEntity.StartedAt).TotalSeconds;
+            FuelStationMetrics.DeliveryDuration.Observe(duration);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Delivery {SessionId} failed unexpectedly", sessionId);
-            Metrics.FuelStationMetrics.Errors.WithLabels(
+            FuelStationMetrics.Errors.WithLabels(
                 stationId,
                 OpenTelemetryConstants.Operations.CompleteDelivery,
                 (ex as DeliveryException)?.Error.Code ?? ErrorCatalog.Unknown.Code).Inc();
@@ -192,7 +195,7 @@ public class DeliveryOrchestrator : BackgroundService
             var fuelToAddClamped = Math.Min(fuelToAdd, freeSpace);
             tank.CurrentVolume += fuelToAddClamped;
             await _lockProvider.SetTankVolumeAsync(tank.Id, tank.CurrentVolume);
-            Metrics.FuelStationMetrics.TankVolume.WithLabels(stationId, tank.Id, $"{fuelType}").Set((double)tank.CurrentVolume);
+            FuelStationMetrics.TankVolume.WithLabels(stationId, tank.Id, $"{fuelType}").Set((double)tank.CurrentVolume);
         }
         finally
         {
