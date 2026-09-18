@@ -4,6 +4,8 @@ public class DeliverySessionEntity
 {
     public string Id { get; set; } = "";
     public DeliverySessionStatus Status { get; set; } = DeliverySessionStatus.Scheduled;
+    public DateTime StartedAt { get; set; }
+    public DateTime? FinishedAt { get; set; }
     
     // foreign keys
     public string StationId { get; set; } = "";

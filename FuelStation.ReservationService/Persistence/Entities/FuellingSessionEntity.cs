@@ -7,6 +7,8 @@ public class FuellingSessionEntity
     public decimal ReservedVolume { get; set; }
     public decimal? ActualVolume { get; set; }
     public string Status { get; set; } = "";
+    public DateTime StartedAt { get; set; }
+    public DateTime? FinishedAt { get; set; }
     
     // foreign keys
     public string StationId { get; set; } = "";

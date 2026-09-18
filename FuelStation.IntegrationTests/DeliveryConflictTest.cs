@@ -99,8 +99,10 @@ public class DeliveryConflictTest : IntegrationTestBase
             
             Assert.NotNull(session1);
             Assert.Equal(DeliverySessionStatus.Completed, session1.Status);
+            Assert.NotNull(session1.FinishedAt);
             Assert.NotNull(session2);
             Assert.Equal(DeliverySessionStatus.Failed, session2.Status);
+            Assert.NotNull(session2.FinishedAt);
             
             // fuel unloaded successfully
             var tank = await db.Tanks.FindAsync(Tank1Id);
@@ -161,6 +163,7 @@ public class DeliveryConflictTest : IntegrationTestBase
             session = await db.DeliverySessions.FindAsync(taskResult.SessionId);
             Assert.NotNull(session);
             Assert.Equal(DeliverySessionStatus.Failed, session.Status);
+            Assert.NotNull(session.FinishedAt);
             
             // fuel was not unloaded
             var tank = await db.Tanks.FindAsync(Tank1Id);

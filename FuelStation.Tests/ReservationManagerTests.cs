@@ -53,6 +53,8 @@ public class ReservationManagerTests
             Assert.Equal(pumpId, session.PumpId);
             Assert.Equal(fuelType, session.FuelType);
             Assert.Equal(volume, session.ReservedVolume);
+            Assert.Equal(SessionStatus.Reserved, session.Status);
+            Assert.True(DateTime.UtcNow <= session.StartedAt);
         }
     }
 
@@ -299,6 +301,8 @@ public class ReservationManagerTests
             idempotencyKey: Guid.NewGuid().ToString()
         );
         
+        var redisLockMock = serviceProvider.GetRequiredService<IRedisLockProvider>();
+        
         //# Assert
         using (var assertScope = scopeFactory.CreateScope())
         {
@@ -313,6 +317,9 @@ public class ReservationManagerTests
             var session = await db.FuellingSessions.FirstOrDefaultAsync();
             Assert.Null(session);
             Assert.Equal(ErrorCatalog.FuelTypeMismatch.Code, result.ErrorCode);
+            
+            await redisLockMock.Received(1).ReleaseLockAsync(
+                Arg.Is<RedisLockToken>(t => t.Key == LockConstants.PumpLockKey(pumpId)));
         }
     }
     
@@ -539,6 +546,8 @@ public class ReservationManagerTests
             await db.SaveChangesAsync();
         }
         
+        var redisLockMock = serviceProvider.GetRequiredService<IRedisLockProvider>();
+        
         //# Act
         CompleteFuellingResult completeResult;
         const int actualVolume = volume - 10;
@@ -555,9 +564,16 @@ public class ReservationManagerTests
         using (var assertScope = scopeFactory.CreateScope())
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
-            Assert.Null(await db.FuellingSessions.FirstOrDefaultAsync());
+            var session = await db.FuellingSessions.FirstOrDefaultAsync();
+            Assert.NotNull(session);
             var tank = await db.Tanks.FindAsync(tankId);
             Assert.Equal(100 - actualVolume, tank!.CurrentVolume);
+            Assert.NotNull(session.FinishedAt);
+            Assert.True(session.StartedAt < session.FinishedAt);
+            Assert.Equal(SessionStatus.Completed, session.Status);
+            
+            await redisLockMock.Received(1).ReleaseLockAsync(
+                Arg.Is<RedisLockToken>(t => t.Key == LockConstants.TankLockKey(tankId)));
         }
     }
 
@@ -610,6 +626,7 @@ public class ReservationManagerTests
             tank!.CurrentVolume -= volume;
             await db.SaveChangesAsync();
         }
+        var redisLockMock = serviceProvider.GetRequiredService<IRedisLockProvider>();
 
         //# Act
         var completeResult = await manager.CompleteFuellingAsync(stationId, sessionId, volume);
@@ -620,11 +637,18 @@ public class ReservationManagerTests
         using (var assertScope = scopeFactory.CreateScope())
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
-            Assert.Null(await db.FuellingSessions.FirstOrDefaultAsync());
+            var session = await db.FuellingSessions.FirstOrDefaultAsync();
+            Assert.NotNull(session);
             var tank = await db.Tanks.FindAsync(tankId);
             Assert.Equal(100 - volume, tank!.CurrentVolume);
             Assert.Equal(ErrorCatalog.PumpNotFound.Code, completeResult.ErrorCode);
             Assert.Contains(ErrorCatalog.PumpNotFound.Format(missingPumpId), completeResult.ErrorText);
+            Assert.NotNull(session.FinishedAt);
+            Assert.True(session.StartedAt < session.FinishedAt);
+            Assert.Equal(SessionStatus.Failed, session.Status);
+            
+            await redisLockMock.DidNotReceive().ReleaseLockAsync(
+                Arg.Is<RedisLockToken>(t => t.Key == LockConstants.TankLockKey(tankId)));
         }
     }
     
@@ -642,6 +666,7 @@ public class ReservationManagerTests
         const string sessionId = "session-1";
         await CreateFuellingSession(scopeFactory,
             sessionId, stationId, missingTankId, pumpId, fuelType, volume, SessionStatus.Reserved);
+        var redisLockMock = serviceProvider.GetRequiredService<IRedisLockProvider>();
 
         //# Act
         var completeResult = await manager.CompleteFuellingAsync(stationId, sessionId, volume);
@@ -652,11 +677,18 @@ public class ReservationManagerTests
         using (var assertScope = scopeFactory.CreateScope())
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
-            Assert.Null(await db.FuellingSessions.FirstOrDefaultAsync());
+            var session = await db.FuellingSessions.FirstOrDefaultAsync();
+            Assert.NotNull(session);
             var tank = await db.Tanks.FindAsync(tankId);
             Assert.Equal(100, tank!.CurrentVolume);
             Assert.Equal(ErrorCatalog.TankNotFound.Code, completeResult.ErrorCode);
             Assert.Contains(ErrorCatalog.TankNotFound.Format(missingTankId), completeResult.ErrorText);
+            Assert.NotNull(session.FinishedAt);
+            Assert.True(session.StartedAt < session.FinishedAt);
+            Assert.Equal(SessionStatus.Failed, session.Status);
+            
+            await redisLockMock.DidNotReceive().ReleaseLockAsync(
+                Arg.Is<RedisLockToken>(t => t.Key == LockConstants.TankLockKey(tankId)));
         }
     }
 
@@ -672,7 +704,8 @@ public class ReservationManagerTests
         const int volume = 50;
         const string sessionId = "session-1";
         await CreateFuellingSession(scopeFactory,
-            sessionId, stationId, tankId, pumpId, fuelType, volume, SessionStatus.Completed);
+            sessionId, stationId, tankId, pumpId, fuelType, volume, SessionStatus.Completed, DateTime.UtcNow);
+        var redisLockMock = serviceProvider.GetRequiredService<IRedisLockProvider>();
 
         //# Act
         var completeResult = await manager.CompleteFuellingAsync(stationId, sessionId, volume);
@@ -683,11 +716,18 @@ public class ReservationManagerTests
         using (var assertScope = scopeFactory.CreateScope())
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
-            Assert.Null(await db.FuellingSessions.FirstOrDefaultAsync());
+            var session = await db.FuellingSessions.FirstOrDefaultAsync();
+            Assert.NotNull(session);
             var tank = await db.Tanks.FindAsync(tankId);
             Assert.Equal(100, tank!.CurrentVolume);
             Assert.Equal(ErrorCatalog.SessionAlreadyCompleted.Code, completeResult.ErrorCode);
             Assert.Contains(ErrorCatalog.SessionAlreadyCompleted.Format(sessionId), completeResult.ErrorText);
+            Assert.NotNull(session.FinishedAt);
+            Assert.True(session.StartedAt < session.FinishedAt);
+            Assert.Equal(SessionStatus.Completed, session.Status);
+            
+            await redisLockMock.DidNotReceive().ReleaseLockAsync(
+                Arg.Is<RedisLockToken>(t => t.Key == LockConstants.TankLockKey(tankId)));
         }
     }
     
@@ -728,14 +768,67 @@ public class ReservationManagerTests
         using (var assertScope = scopeFactory.CreateScope())
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
-            Assert.Null(await db.FuellingSessions.FirstOrDefaultAsync());
+            var session = await db.FuellingSessions.FirstOrDefaultAsync();
+            Assert.NotNull(session);
             var tank = await db.Tanks.FindAsync(tankId);
             Assert.Equal(100 - volume, tank!.CurrentVolume);
             Assert.Equal(ErrorCatalog.TankIsBusy.Code, completeResult.ErrorCode);
             Assert.Contains(ErrorCatalog.TankIsBusy.Format(tankId), completeResult.ErrorText);
+            Assert.NotNull(session.FinishedAt);
+            Assert.True(session.StartedAt < session.FinishedAt);
+            Assert.Equal(SessionStatus.Failed, session.Status);
+            
+            await redisLockMock.DidNotReceive().ReleaseLockAsync(
+                Arg.Is<RedisLockToken>(t => t.Key == LockConstants.TankLockKey(tankId)));
         }
     }
 
+    #endregion
+    
+    #region FullCycle
+    
+    [Fact]
+    public async Task FullFuellingCycle_ReservesAndCompletesSession()
+    {
+        //# Arrange
+        var (manager, serviceProvider, scopeFactory) = CreateManagerWithInMemoryDb();
+        var (stationId, tankId, pumpId, _) = await TestHelpers.SeedDefaultDataToDbAsync(serviceProvider);
+
+        var redisLockMock = serviceProvider.GetRequiredService<IRedisLockProvider>();
+
+        const FuelType fuelType = FuelType.Ai95;
+        const double preauthorized = 50;
+        const int actual = 40;
+        var idempotencyKey = Guid.NewGuid().ToString();
+
+        //# Act 1: start
+        var startResult = await manager.StartFuellingAsync(stationId, pumpId, fuelType, preauthorized, idempotencyKey);
+        Assert.True(startResult.Success, startResult.ErrorText);
+
+        //# Act 2: complete
+        var completeResult = await manager.CompleteFuellingAsync(stationId, startResult.SessionId!, actual);
+        Assert.True(completeResult.Success, completeResult.ErrorText);
+
+        //# Assert
+        using var assertScope = scopeFactory.CreateScope();
+        var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var session = await db.FuellingSessions.FindAsync(startResult.SessionId);
+        Assert.NotNull(session);
+        Assert.Equal(SessionStatus.Completed, session.Status);
+        Assert.NotNull(session.FinishedAt);
+        Assert.True(session.StartedAt < session.FinishedAt);
+
+        var tank = await db.Tanks.FindAsync(tankId);
+        Assert.Equal(100 - actual, tank!.CurrentVolume); // reserved 50, returned 10
+
+        // Both locks must be released
+        // The tank lock is acquired and released twice: once in StartFuelling (reserve), once in CompleteFuelling (return leftover).
+        await redisLockMock.Received(2).ReleaseLockAsync(
+            Arg.Is<RedisLockToken>(t => t.Key == LockConstants.TankLockKey(tankId)));
+        await redisLockMock.Received(1).ReleaseLockAsync(
+            Arg.Is<RedisLockToken>(t => t.Key == LockConstants.PumpLockKey(pumpId)));
+    }
+    
     #endregion
 
     private (ReservationManager manager, ServiceProvider serviceProvider, IServiceScopeFactory scopeFactory) CreateManagerWithInMemoryDb()
@@ -747,7 +840,7 @@ public class ReservationManagerTests
     }
 
     private async Task CreateFuellingSession(IServiceScopeFactory scopeFactory,
-        string sessionId, string stationId, string tankId, string pumpId, FuelType fuelType, int volumeToReserve, string status)
+        string sessionId, string stationId, string tankId, string pumpId, FuelType fuelType, int volumeToReserve, string status, DateTime? finishedAt = null)
     {
         using var arrangeScope = scopeFactory.CreateScope();
         var db = arrangeScope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -759,7 +852,9 @@ public class ReservationManagerTests
             PumpId = pumpId,
             FuelType = fuelType,
             ReservedVolume = volumeToReserve,
-            Status = status
+            Status = status,
+            StartedAt = DateTime.UtcNow,
+            FinishedAt = finishedAt
         };
         await db.FuellingSessions.AddAsync(session);
         await db.SaveChangesAsync();

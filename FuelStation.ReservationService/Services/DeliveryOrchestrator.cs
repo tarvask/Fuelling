@@ -61,15 +61,16 @@ public class DeliveryOrchestrator : BackgroundService
         
         var session = new DeliverySessionEntity
         {
-            Id = Guid.NewGuid().ToString(),
+            Id = $"{Guid.NewGuid()}",
             StationId = stationId,
             Compartments = compartments.Select(c => new DeliveryCompartmentEntity
             {
-                Id = Guid.NewGuid().ToString(),
+                Id = $"{Guid.NewGuid()}",
                 FuelType = c.FuelType,
                 Litres = c.Litres
             }).ToList(),
-            Status = DeliverySessionStatus.Scheduled
+            Status = DeliverySessionStatus.Scheduled,
+            StartedAt = DateTime.UtcNow
         }; 
         db.DeliverySessions.Add(session);
         await db.SaveChangesAsync();
@@ -119,6 +120,7 @@ public class DeliveryOrchestrator : BackgroundService
 
             // completed
             sessionEntity.Status = DeliverySessionStatus.Completed;
+            sessionEntity.FinishedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
             await _kafka.SendDeliveryEvent(stationId, sessionId, $"{DeliverySessionStatus.Completed}");
             Metrics.FuelStationMetrics.DeliveryCompleted.Inc();
@@ -138,6 +140,7 @@ public class DeliveryOrchestrator : BackgroundService
                 if (sessionEntity != null)
                 {
                     sessionEntity.Status = DeliverySessionStatus.Failed;
+                    sessionEntity.FinishedAt = DateTime.UtcNow;
                     await db.SaveChangesAsync();
                 }
 

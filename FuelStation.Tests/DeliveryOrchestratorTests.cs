@@ -10,19 +10,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using Xunit.Abstractions;
 
 namespace FuelStation.Tests;
 
 public class DeliveryOrchestratorTests
 {
-    private readonly ITestOutputHelper _output;
-    
-    public DeliveryOrchestratorTests(ITestOutputHelper output)
-    {
-        _output = output;
-    }
-
     [Fact]
     public async Task StartDeliveryProcess_ValidRequest_ReturnsSuccessAndCreatesScheduledSession()
     {
@@ -51,6 +43,8 @@ public class DeliveryOrchestratorTests
             var session = await db.DeliverySessions.FirstOrDefaultAsync(s => s.Id == result.SessionId);
             Assert.NotNull(session);
             Assert.Equal(DeliverySessionStatus.Scheduled, session.Status);
+            Assert.True(session.StartedAt <= DateTime.UtcNow);
+            Assert.Null(session.FinishedAt);
         }
         await kafka.Received(1).SendDeliveryEvent(stationId, result.SessionId!, scheduledStatus);
     }
@@ -61,7 +55,7 @@ public class DeliveryOrchestratorTests
         //# Arrange
         // base
         var simulationConfig = TestHelpers.CreateTestSimulationConfig();
-        var (orchestrator, serviceProvider, scopeFactory, _, _, kafka) = CreateOrchestratorWithInMemoryDb(simulationConfig);
+        var (orchestrator, serviceProvider, scopeFactory, redisLockProvider, _, kafka) = CreateOrchestratorWithInMemoryDb(simulationConfig);
         var (stationId, tankId, _, _) = await TestHelpers.SeedDefaultDataToDbAsync(serviceProvider);
 
         using (var arrangeScope = scopeFactory.CreateScope())
@@ -86,8 +80,15 @@ public class DeliveryOrchestratorTests
         using (var assertScope = serviceProvider.CreateScope())
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var session = await db.DeliverySessions.FindAsync(startResult.SessionId!);
             var tank = await db.Tanks.FindAsync(tankId);
             Assert.Equal(100 + (int)compartments[0].Litres, tank!.CurrentVolume);
+            Assert.NotNull(session.FinishedAt);
+            Assert.True(session.StartedAt <= session.FinishedAt);
+            Assert.Equal(DeliverySessionStatus.Completed, session.Status);
+            
+            await redisLockProvider.Received(1).ReleaseLockAsync(
+                Arg.Is<RedisLockToken>(t => t.Key == LockConstants.TankLockKey(tankId)));
         }
     }
 
@@ -123,6 +124,8 @@ public class DeliveryOrchestratorTests
             await db.SaveChangesAsync();
         }
         
+        var lockProvider = serviceProvider.GetRequiredService<IRedisLockProvider>();
+        
         var compartments = new List<Compartment>
         {
             new() { FuelType = FuelType.Ai92, Litres = 50 },
@@ -138,12 +141,19 @@ public class DeliveryOrchestratorTests
         using (var assertScope = serviceProvider.CreateScope())
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var session = await db.DeliverySessions.FindAsync(startResult.SessionId);
             var tank92 = await db.Tanks.FindAsync(tankAi92Id);
             Assert.Equal(ai92CurrentVolume + (int)compartments[0].Litres, tank92!.CurrentVolume);
             var tank95 = await db.Tanks.FindAsync(tankAi95Id);
             Assert.Equal(ai95CurrentVolume + (int)compartments[1].Litres, tank95!.CurrentVolume);
             var tankDt = await db.Tanks.FindAsync(tankDtId);
             Assert.Equal(int.Clamp(dtCurrentVolume + (int)compartments[2].Litres, 0, capacity), tankDt!.CurrentVolume);
+            Assert.NotNull(session!.FinishedAt);
+            Assert.True(session.StartedAt <= session.FinishedAt);
+            Assert.Equal(DeliverySessionStatus.Completed, session.Status);
+            
+            await lockProvider.Received(1).ReleaseLockAsync(
+                Arg.Is<RedisLockToken>(t => t.Key == LockConstants.StationLockKey(stationId)));
         }
     }
 
@@ -203,9 +213,14 @@ public class DeliveryOrchestratorTests
         using (var assertScope = scopeFactory.CreateScope())
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
-            Assert.NotNull(await db.DeliverySessions.FindAsync(startResult.SessionId));
+            var session = await db.DeliverySessions.FindAsync(startResult.SessionId);
+            Assert.NotNull(session);
             var tank = await db.Tanks.FindAsync(tankId);
             Assert.Equal(100, tank!.CurrentVolume);
+            Assert.NotNull(session.FinishedAt);
+            
+            await lockProvider.DidNotReceive().ReleaseLockAsync(
+                Arg.Is<RedisLockToken>(t => t.Key == LockConstants.StationLockKey(stationId)));
         }
     }
     
@@ -224,7 +239,6 @@ public class DeliveryOrchestratorTests
             .Returns((RedisLockToken?)null);
         lockProvider.TryAcquireLockWithRetryAsync(lockKey, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>())
             .Returns((RedisLockToken?)null);
-        lockProvider.IsLockedAsync(lockKey).Returns(true);
         
         var compartments = new List<Compartment> { new() { FuelType = FuelType.Ai95, Litres = 1000 } };
         
@@ -240,9 +254,14 @@ public class DeliveryOrchestratorTests
         using (var assertScope = scopeFactory.CreateScope())
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
-            Assert.NotNull(await db.DeliverySessions.FindAsync(startResult.SessionId));
+            var session = await db.DeliverySessions.FindAsync(startResult.SessionId);
+            Assert.NotNull(session);
             var tank = await db.Tanks.FindAsync(tankId);
             Assert.Equal(100, tank!.CurrentVolume);
+            Assert.NotNull(session.FinishedAt);
+            
+            await lockProvider.DidNotReceive().ReleaseLockAsync(
+                Arg.Is<RedisLockToken>(t => t.Key == LockConstants.TankLockKey(tankId)));
         }
     }
 
@@ -263,7 +282,7 @@ public class DeliveryOrchestratorTests
         
         //# Assert
         Assert.False(result.Success);
-        Assert.Contains(ErrorCatalog.IdempotencyKeyNotProvidedForDelivering.Code, result.ErrorCode);
+        Assert.Equal(ErrorCatalog.IdempotencyKeyNotProvidedForDelivering.Code, result.ErrorCode);
         using (var assertScope = scopeFactory.CreateScope())
         {
             var db = assertScope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -325,11 +344,11 @@ public class DeliveryOrchestratorTests
     private async Task<DeliverySessionStatus?> WaitForDeliverySessionComplete(ServiceProvider serviceProvider, string sessionId)
     {
         // wait to 5 seconds, until the session becomes Completed
-        using var actScope = serviceProvider.CreateScope();
-        var db = actScope.ServiceProvider.GetRequiredService<AppDbContext>();
         for (int i = 0; i < 50; i++)
         {
             await Task.Delay(100);
+            using var actScope = serviceProvider.CreateScope();
+            var db = actScope.ServiceProvider.GetRequiredService<AppDbContext>();
             var session = await db.DeliverySessions.FindAsync(sessionId);
             if (session != null && session.Status is DeliverySessionStatus.Completed or DeliverySessionStatus.Failed)
                 return session.Status;

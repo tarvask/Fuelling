@@ -84,8 +84,10 @@ public class DeliveryLoadTest : IntegrationTestBase
 
             Assert.NotNull(session1);
             Assert.Equal(DeliverySessionStatus.Completed, session1.Status);
+            Assert.NotNull(session1.FinishedAt);
             Assert.NotNull(session2);
             Assert.Equal(DeliverySessionStatus.Completed, session2.Status);
+            Assert.NotNull(session2.FinishedAt);
 
             // fuel unloaded successfully
             var tank1 = await db.Tanks.FindAsync(Tank1Id);

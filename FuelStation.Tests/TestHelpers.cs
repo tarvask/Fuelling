@@ -27,10 +27,17 @@ public static class TestHelpers
         var redisLockMock = Substitute.For<IRedisLockProvider>();
         // locks can always be captured
         redisLockMock.TryAcquireLockAsync(Arg.Any<string>(), Arg.Any<TimeSpan>())
-            .Returns(new RedisLockToken("mock-key", "mock-token"));
-        redisLockMock.TryAcquireLockWithRetryAsync(Arg.Any<string>(),
-                Arg.Any<int>(),Arg.Any<int>(), Arg.Any<int>())
-            .Returns(new RedisLockToken("mock-key", "mock-token"));
+            .Returns(callInfo =>
+            {
+                var key = callInfo.ArgAt<string>(0);
+                return new RedisLockToken(key, "mock-token");
+            });
+        redisLockMock.TryAcquireLockWithRetryAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>())
+            .Returns(callInfo =>
+            {
+                var key = callInfo.ArgAt<string>(0);
+                return new RedisLockToken(key, "mock-token");
+            });
         redisLockMock.IsLockedAsync(Arg.Any<string>()).Returns(false);
         
         var redisIdempotencyMock = Substitute.For<IRedisIdempotencyProvider>();

@@ -69,7 +69,10 @@ public class FuellingAndDeliveryIntegrationTests : IntegrationTestBase
             Assert.Equal(420, tank!.CurrentVolume);
 
             var session = await db.FuellingSessions.FindAsync(startReply.SessionId);
-            Assert.Null(session); // session should be removed
+            Assert.NotNull(session); // session be persisted
+            Assert.Equal(SessionStatus.Completed, session.Status);
+            Assert.NotNull(session.FinishedAt);
+            Assert.True(session.StartedAt <= session.FinishedAt);
         }
 
         // Verify Kafka events were produced
@@ -99,8 +102,6 @@ public class FuellingAndDeliveryIntegrationTests : IntegrationTestBase
         //# Assert: start succeeded
         Assert.True(startReply.Success);
         Assert.False(string.IsNullOrEmpty(startReply.SessionId));
-        
-        DeliverySessionEntity? session = null;
 
         // Check session exists in DB with status Completed
         using (var scope = Fixture.Factory.Services.CreateScope())
@@ -112,7 +113,7 @@ public class FuellingAndDeliveryIntegrationTests : IntegrationTestBase
             {
                 await Task.Delay(300);
                 // reload from db
-                session = await db.DeliverySessions.FindAsync(startReply.SessionId);
+                var session = await db.DeliverySessions.FindAsync(startReply.SessionId);
                 // for already tracked items FindAsync returns cache,
                 // so force reloading
                 if (session != null) await db.Entry(session).ReloadAsync();
@@ -126,9 +127,11 @@ public class FuellingAndDeliveryIntegrationTests : IntegrationTestBase
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             
-            session = await db.DeliverySessions.FindAsync(startReply.SessionId);
+            var session = await db.DeliverySessions.FindAsync(startReply.SessionId);
             Assert.NotNull(session);
             Assert.Equal(DeliverySessionStatus.Completed, session.Status);
+            Assert.NotNull(session.FinishedAt);
+            Assert.True(session.StartedAt <= session.FinishedAt);
             
             // Check tank volume updated: 500 + 300 = 800
             var tank = await db.Tanks.FindAsync(TankId);
@@ -155,7 +158,7 @@ public class FuellingAndDeliveryIntegrationTests : IntegrationTestBase
             {
                 await Task.Delay(300);
                 // reload from db
-                session = await db.DeliverySessions.FindAsync(startReply.SessionId);
+                var session = await db.DeliverySessions.FindAsync(startReply.SessionId);
                 // for already tracked items FindAsync returns cache,
                 // so force reloading
                 if (session != null) await db.Entry(session).ReloadAsync();
